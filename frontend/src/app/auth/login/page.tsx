@@ -34,7 +34,7 @@ export default function LoginPage() {
       const success = await login(formData.email, formData.password);
       
       if (success) {
-        router.push("/pages/dashboard");
+        router.push("/dashboard");
       } else {
         setError("Invalid email or password");
       }
