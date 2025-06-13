@@ -1,15 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { User, Mail, Lock, Phone, UserCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
+interface SignupFormData {
+  fullName: string;
+  email: string;
+  gender: string;
+  phoneNumber: string;
+  password: string;
+  confirmPassword: string;
+}
+
 export default function SignupPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { signup } = useAuth();
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SignupFormData>({
     fullName: "",
     email: "",
     gender: "male",
@@ -43,11 +53,11 @@ export default function SignupPage() {
       const success = await signup(formData);
       
       if (success) {
-        navigate("/dashboard", { replace: true });
+        router.push("/dashboard");
       } else {
         setError("Signup failed. Please try again.");
       }
-    } catch (error) {
+    } catch (err) {
       setError("Signup failed. Please try again.");
     } finally {
       setIsLoading(false);
@@ -192,7 +202,7 @@ export default function SignupPage() {
             <div className="text-center">
               <p className="text-sm text-gray-600">
                 Already have an account?{" "}
-                <Link to="/auth/login" className="text-blue-600 hover:text-blue-700 font-medium">
+                <Link href="/auth/login" className="text-blue-600 hover:text-blue-700 font-medium">
                   Sign in here
                 </Link>
               </p>

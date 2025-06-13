@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useNavigate, Link, useLocation } from "react-router-dom";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Mail, Lock, LogIn } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
   const { login } = useAuth();
   
   const [formData, setFormData] = useState({
@@ -17,14 +17,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const from = location.state?.from?.pathname || "/dashboard";
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
     }));
-    setError(""); // Clear error when user types
+    setError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,11 +34,11 @@ export default function LoginPage() {
       const success = await login(formData.email, formData.password);
       
       if (success) {
-        navigate(from, { replace: true });
+        router.push("/pages/dashboard");
       } else {
         setError("Invalid email or password");
       }
-    } catch (error) {
+    } catch (err) {
       setError("Login failed. Please try again.");
     } finally {
       setIsLoading(false);
@@ -161,8 +159,8 @@ export default function LoginPage() {
 
             <div className="text-center">
               <p className="text-sm text-gray-600">
-                Don't have an account?{" "}
-                <Link to="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium">
+                Don&apos;t have an account?{" "}
+                <Link href="/auth/signup" className="text-blue-600 hover:text-blue-700 font-medium">
                   Create one here
                 </Link>
               </p>

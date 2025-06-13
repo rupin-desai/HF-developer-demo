@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, Save, User, Upload, FileText, Eye, Trash2, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
+type FileType = "Lab Report" | "Prescription" | "X-Ray" | "Blood Report" | "MRI Scan" | "CT Scan";
+
+interface MedicalFile {
+  id: string;
+  fileName: string;
+  fileType: FileType;
+  uploadDate: string;
+  fileUrl: string;
+  fileSize: string;
+  preview: string;
+}
+
 // Dummy files data
-const dummyFiles = [
+const dummyFiles: MedicalFile[] = [
   {
     id: "1",
     fileName: "Blood Test Results - January 2024",
-    fileType: "Blood Report" as const,
+    fileType: "Blood Report",
     uploadDate: "2024-01-15",
     fileUrl: "/uploads/blood-report-jan-2024.pdf",
     fileSize: "2.5 MB",
@@ -19,7 +31,7 @@ const dummyFiles = [
   {
     id: "2",
     fileName: "Chest X-Ray Analysis",
-    fileType: "X-Ray" as const,
+    fileType: "X-Ray",
     uploadDate: "2024-01-10",
     fileUrl: "/uploads/chest-xray-2024.jpg",
     fileSize: "5.2 MB",
@@ -28,7 +40,7 @@ const dummyFiles = [
   {
     id: "3",
     fileName: "Prescription - Antibiotics",
-    fileType: "Prescription" as const,
+    fileType: "Prescription",
     uploadDate: "2024-01-08",
     fileUrl: "/uploads/prescription-antibiotics.pdf",
     fileSize: "1.8 MB",
@@ -37,10 +49,10 @@ const dummyFiles = [
 ];
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { user, logout, updateProfile } = useAuth();
+  const router = useRouter();
+  const { user, logout, updateProfile, isAuthenticated, isLoading } = useAuth();
   
-  const [files, setFiles] = useState(dummyFiles);
+  const [files, setFiles] = useState<MedicalFile[]>(dummyFiles);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState(user || {
     id: "",
@@ -51,10 +63,24 @@ export default function DashboardPage() {
     profileImage: ""
   });
   const [uploadFormData, setUploadFormData] = useState({
-    fileType: "Lab Report",
+    fileType: "Lab Report" as FileType,
     fileName: "",
     file: null as File | null
   });
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/auth/login");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  // Update profile form when user changes
+  useEffect(() => {
+    if (user) {
+      setProfileFormData(user);
+    }
+  }, [user]);
 
   // Profile handlers
   const handleProfileInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -103,10 +129,10 @@ export default function DashboardPage() {
   const handleFileUpload = (e: React.FormEvent) => {
     e.preventDefault();
     if (uploadFormData.file && uploadFormData.fileName) {
-      const newFile = {
+      const newFile: MedicalFile = {
         id: Date.now().toString(),
         fileName: uploadFormData.fileName,
-        fileType: uploadFormData.fileType as any,
+        fileType: uploadFormData.fileType,
         uploadDate: new Date().toISOString().split('T')[0],
         fileUrl: URL.createObjectURL(uploadFormData.file),
         fileSize: `${(uploadFormData.file.size / 1024 / 1024).toFixed(2)} MB`,
@@ -130,11 +156,31 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     logout();
-    navigate("/auth/login", { replace: true });
+    router.push("/auth/login");
   };
 
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user not available
   if (!user) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
