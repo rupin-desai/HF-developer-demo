@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useNavigate, Link } from "react-router-dom";
 import { User, Mail, Lock, Phone, UserCheck } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SignupPage() {
-  const router = useRouter();
+  const navigate = useNavigate();
+  const { signup } = useAuth();
+  
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -15,21 +17,41 @@ export default function SignupPage() {
     password: "",
     confirmPassword: ""
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
     }));
+    setError("");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Connect to API later
-    console.log("Sign up data:", formData);
     
-    // Simulate successful signup and redirect to dashboard
-    router.push("/pages/dashboard");
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const success = await signup(formData);
+      
+      if (success) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        setError("Signup failed. Please try again.");
+      }
+    } catch (error) {
+      setError("Signup failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -46,6 +68,12 @@ export default function SignupPage() {
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -155,15 +183,16 @@ export default function SignupPage() {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-lg"
+              disabled={isLoading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 text-lg"
             >
-              Create Account
+              {isLoading ? "Creating Account..." : "Create Account"}
             </button>
 
             <div className="text-center">
               <p className="text-sm text-gray-600">
                 Already have an account?{" "}
-                <Link href="/pages/auth/login" className="text-blue-600 hover:text-blue-700 font-medium">
+                <Link to="/auth/login" className="text-blue-600 hover:text-blue-700 font-medium">
                   Sign in here
                 </Link>
               </p>

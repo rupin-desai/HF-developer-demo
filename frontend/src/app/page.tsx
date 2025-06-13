@@ -1,21 +1,38 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import LoginPage from "./pages/auth/LoginPage";
+import SignupPage from "@/app/pages/auth/SignUpPage";
+import DashboardPage from "@/app/pages/dashboard/DashboardPage";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
-export default function Home() {
-  const router = useRouter();
-
-  useEffect(() => {
-    // Redirect to login page (since user should authenticate first)
-    router.push("/pages/auth/login");
-  }, [router]);
-
+export default function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-xl font-medium text-gray-600">
-        Redirecting to login...
-      </div>
-    </div>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Default redirect to login */}
+          <Route path="/" element={<Navigate to="/auth/login" replace />} />
+
+          {/* Auth routes */}
+          <Route path="/auth/login" element={<LoginPage />} />
+          <Route path="/auth/signup" element={<SignupPage />} />
+
+          {/* Protected routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all route - redirect to login */}
+          <Route path="*" element={<Navigate to="/auth/login" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }

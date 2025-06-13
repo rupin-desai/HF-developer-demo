@@ -1,20 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Camera, Save, User, Upload, FileText, Eye, Trash2, LogOut, Settings } from "lucide-react";
-import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 
-// Dummy data
-const dummyUser = {
-  id: "1",
-  fullName: "Dr. Sarah Johnson",
-  email: "sarah.johnson@medical.com",
-  gender: "female" as const,
-  phoneNumber: "+1 (555) 123-4567",
-  profileImage: "/images/default-avatar.png"
-};
-
+// Dummy files data
 const dummyFiles = [
   {
     id: "1",
@@ -46,11 +37,19 @@ const dummyFiles = [
 ];
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [user, setUser] = useState(dummyUser);
+  const navigate = useNavigate();
+  const { user, logout, updateProfile } = useAuth();
+  
   const [files, setFiles] = useState(dummyFiles);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileFormData, setProfileFormData] = useState(user);
+  const [profileFormData, setProfileFormData] = useState(user || {
+    id: "",
+    fullName: "",
+    email: "",
+    gender: "male" as const,
+    phoneNumber: "",
+    profileImage: ""
+  });
   const [uploadFormData, setUploadFormData] = useState({
     fileType: "Lab Report",
     fileName: "",
@@ -66,13 +65,20 @@ export default function DashboardPage() {
   };
 
   const handleProfileSave = () => {
-    setUser(profileFormData);
+    updateProfile(profileFormData);
     setIsEditingProfile(false);
     console.log("Profile updated:", profileFormData);
   };
 
   const handleProfileCancel = () => {
-    setProfileFormData(user);
+    setProfileFormData(user || {
+      id: "",
+      fullName: "",
+      email: "",
+      gender: "male" as const,
+      phoneNumber: "",
+      profileImage: ""
+    });
     setIsEditingProfile(false);
   };
 
@@ -123,9 +129,13 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
-    console.log("Logout clicked");
-    router.push("/pages/auth/login");
+    logout();
+    navigate("/auth/login", { replace: true });
   };
+
+  if (!user) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
