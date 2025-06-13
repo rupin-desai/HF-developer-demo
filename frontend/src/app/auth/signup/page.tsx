@@ -29,6 +29,7 @@ export default function SignupPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData(prev => ({
@@ -36,6 +37,7 @@ export default function SignupPage() {
       [e.target.name]: e.target.value
     }));
     setError("");
+    setSuccessMessage("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,14 +48,29 @@ export default function SignupPage() {
       return;
     }
 
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      return;
+    }
+
     setIsLoading(true);
     setError("");
 
     try {
-      const success = await signup(formData);
+      const success = await signup({
+        fullName: formData.fullName,
+        email: formData.email,
+        gender: formData.gender,
+        phoneNumber: formData.phoneNumber,
+        password: formData.password
+      });
       
       if (success) {
-        router.push("/dashboard");
+        setSuccessMessage("Account created successfully! Please login with your credentials.");
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          router.push("/auth/login");
+        }, 2000);
       } else {
         setError("Signup failed. Please try again.");
       }
@@ -81,6 +98,12 @@ export default function SignupPage() {
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
                 {error}
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg">
+                {successMessage}
               </div>
             )}
 
@@ -166,8 +189,9 @@ export default function SignupPage() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
+                    minLength={6}
                     className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Create a password"
+                    placeholder="Create a password (min 6 characters)"
                   />
                 </div>
               </div>

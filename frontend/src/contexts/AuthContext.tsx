@@ -22,7 +22,7 @@ interface SignupData {
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  isLoading: boolean; // Add this property
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (userData: SignupData) => Promise<boolean>;
   logout: () => void;
@@ -39,31 +39,43 @@ export const useAuth = () => {
   return context;
 };
 
+const API_BASE_URL = 'http://localhost:5000';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Add loading state
+  const [isLoading, setIsLoading] = useState(true);
 
   // Check if user is logged in on app start
   useEffect(() => {
-    const checkAuth = () => {
+    const checkAuth = async () => {
       try {
-        if (typeof window !== 'undefined') {
-          const savedUser = localStorage.getItem('user');
-          if (savedUser) {
-            const parsedUser = JSON.parse(savedUser);
-            setUser(parsedUser);
-            setIsAuthenticated(true);
-          }
+        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          credentials: 'include', // Include cookies
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          setUser({
+            id: userData.id,
+            fullName: userData.fullName,
+            email: userData.email,
+            gender: userData.gender.toLowerCase() as 'male' | 'female',
+            phoneNumber: userData.phoneNumber,
+            profileImage: userData.profileImage
+          });
+          setIsAuthenticated(true);
+        } else {
+          // User not authenticated
+          setUser(null);
+          setIsAuthenticated(false);
         }
       } catch (error) {
-        console.error('Error loading user from localStorage:', error);
-        // Clear invalid data
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('user');
-        }
+        console.error('Error checking authentication:', error);
+        setUser(null);
+        setIsAuthenticated(false);
       } finally {
-        setIsLoading(false); // Set loading to false when done
+        setIsLoading(false);
       }
     };
 
@@ -72,86 +84,96 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      // TODO: Replace with actual API call
-      console.log('Login attempt:', { email, password });
-      
-      // Simulate API response
-      const dummyUser: User = {
-        id: "1",
-        fullName: "Dr. Sarah Johnson",
-        email: email,
-        gender: "female",
-        phoneNumber: "+1 (555) 123-4567",
-        profileImage: "/images/default-avatar.png"
-      };
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies
+        body: JSON.stringify({
+          email,
+          password
+        })
+      });
 
-      setUser(dummyUser);
-      setIsAuthenticated(true);
-      
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(dummyUser));
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setUser({
+          id: data.user.id,
+          fullName: data.user.fullName,
+          email: data.user.email,
+          gender: data.user.gender.toLowerCase() as 'male' | 'female',
+          phoneNumber: data.user.phoneNumber,
+          profileImage: data.user.profileImage
+        });
+        setIsAuthenticated(true);
+        return true;
+      } else {
+        console.error('Login failed:', data.message);
+        return false;
       }
-      
-      return true;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login error:', error);
       return false;
     }
   };
 
   const signup = async (userData: SignupData): Promise<boolean> => {
     try {
-      // TODO: Replace with actual API call
-      console.log('Signup attempt:', userData);
-      
-      // Simulate API response
-      const newUser: User = {
-        id: Date.now().toString(),
-        fullName: userData.fullName,
-        email: userData.email,
-        gender: userData.gender as 'male' | 'female',
-        phoneNumber: userData.phoneNumber,
-        profileImage: "/images/default-avatar.png"
-      };
+      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(userData)
+      });
 
-      setUser(newUser);
-      setIsAuthenticated(true);
-      
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(newUser));
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // After successful signup, user needs to login
+        console.log('Signup successful:', data.message);
+        return true;
+      } else {
+        console.error('Signup failed:', data.message);
+        return false;
       }
-      
-      return true;
     } catch (error) {
-      console.error('Signup failed:', error);
+      console.error('Signup error:', error);
       return false;
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setIsAuthenticated(false);
-    
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
+  const logout = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
     }
   };
 
-  const updateProfile = (userData: Partial<User>) => {
+  const updateProfile = async (userData: Partial<User>) => {
     if (user) {
       const updatedUser = { ...user, ...userData };
       setUser(updatedUser);
       
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      }
+      // TODO: Add API call to update profile on backend
+      console.log("Profile updated:", updatedUser);
     }
   };
 
   const value = {
     user,
     isAuthenticated,
-    isLoading, // Include isLoading in the context value
+    isLoading,
     login,
     signup,
     logout,

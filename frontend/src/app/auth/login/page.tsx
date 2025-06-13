@@ -36,10 +36,10 @@ export default function LoginPage() {
       if (success) {
         router.push("/dashboard");
       } else {
-        setError("Invalid email or password");
+        setError("Invalid email or password. Please check your credentials and try again.");
       }
     } catch (err) {
-      setError("Login failed. Please try again.");
+      setError("Login failed. Please check your connection and try again.");
     } finally {
       setIsLoading(false);
     }
