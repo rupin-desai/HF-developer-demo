@@ -1,41 +1,98 @@
+using Microsoft.EntityFrameworkCore;
+using MedicalRecords.Application.Services;
+using MedicalRecords.Core.Interfaces;
+using MedicalRecords.Infrastructure.Data;
+using MedicalRecords.Infrastructure.Repositories;
+using MedicalRecords.Infrastructure.Services;
+using MedicalRecords.API.Middleware;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Add services to the container
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000", "https://localhost:3000") // Your frontend URL
+              .AllowCredentials()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// Add Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+}
+
+builder.Services.AddDbContext<MedicalRecordsDbContext>(options =>
+{
+    options.UseSqlite(connectionString);
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+        options.EnableDetailedErrors();
+    }
+});
+
+// Add repositories
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<ISessionRepository, SessionRepository>();
+
+// Add services
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<AuthService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// Ensure database is created and migrated
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<MedicalRecordsDbContext>();
+
+        // This will create the database if it doesn't exist
+        var created = context.Database.EnsureCreated();
+
+        if (created)
+        {
+            Console.WriteLine("Database created successfully!");
+        }
+        else
+        {
+            Console.WriteLine("Database already exists.");
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while creating the database.");
+        throw;
+    }
 }
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+app.UseCors("AllowFrontend");
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+// Add session authentication middleware
+app.UseMiddleware<SessionAuthenticationMiddleware>();
+
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
