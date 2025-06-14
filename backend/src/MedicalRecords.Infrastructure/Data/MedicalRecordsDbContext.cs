@@ -12,7 +12,7 @@ public class MedicalRecordsDbContext : DbContext
 
     public DbSet<User> Users { get; set; }
     public DbSet<MedicalFile> MedicalFiles { get; set; }
-    public DbSet<Session> Sessions { get; set; }
+    public DbSet<UserSession> UserSessions { get; set; } // Add missing DbSet
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,8 +40,8 @@ public class MedicalRecordsDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Configure Session entity
-        modelBuilder.Entity<Session>(entity =>
+        // Configure UserSession entity
+        modelBuilder.Entity<UserSession>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.SessionToken).IsUnique();

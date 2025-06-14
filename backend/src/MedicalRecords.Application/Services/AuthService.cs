@@ -24,9 +24,9 @@ public class AuthService
     {
         try
         {
-            // Find user by email
             var user = await _userRepository.GetByEmailAsync(request.Email);
-            if (user == null)
+
+            if (user == null || !user.IsActive || !_passwordService.VerifyPassword(request.Password, user.PasswordHash))
             {
                 return new AuthResponse
                 {
@@ -35,27 +35,7 @@ public class AuthService
                 };
             }
 
-            // Verify password
-            if (!_passwordService.VerifyPassword(request.Password, user.PasswordHash))
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Invalid email or password"
-                };
-            }
-
-            // Check if user is active
-            if (!user.IsActive)
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Account is deactivated"
-                };
-            }
-
-            // Create session
+            // Create new session
             var session = new UserSession
             {
                 UserId = user.Id,
@@ -113,48 +93,33 @@ public class AuthService
                 };
             }
 
-            // Parse gender
-            if (!Enum.TryParse<Gender>(request.Gender, true, out var gender))
-            {
-                return new AuthResponse
-                {
-                    Success = false,
-                    Message = "Invalid gender value"
-                };
-            }
-
-            // Create user
+            // Create new user
             var user = new User
             {
                 FullName = request.FullName,
                 Email = request.Email,
-                Gender = gender,
+                Gender = Enum.Parse<Gender>(request.Gender),
                 PhoneNumber = request.PhoneNumber,
                 PasswordHash = _passwordService.HashPassword(request.Password),
-                ProfileImage = "/images/default-avatar.png"
+                IsActive = true
             };
 
-            var createdUser = await _userRepository.CreateAsync(user);
+            await _userRepository.CreateAsync(user);
 
             return new AuthResponse
             {
                 Success = true,
-                Message = "Account created successfully",
-                User = new UserDto
-                {
-                    Id = createdUser.Id,
-                    FullName = createdUser.FullName,
-                    Email = createdUser.Email,
-                    Gender = createdUser.Gender.ToString(),
-                    PhoneNumber = createdUser.PhoneNumber,
-                    ProfileImage = createdUser.ProfileImage
-                }
+                Message = "Registration successful"
             };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Auth service error: {ex.Message}");
-            return false; // or appropriate return value based on method
+            Console.WriteLine($"Signup error: {ex.Message}");
+            return new AuthResponse
+            {
+                Success = false,
+                Message = "An error occurred during registration"
+            };
         }
     }
 
@@ -165,8 +130,9 @@ public class AuthService
             await _sessionRepository.DeactivateAsync(sessionToken);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"Logout error: {ex.Message}");
             return false;
         }
     }
@@ -176,12 +142,13 @@ public class AuthService
         try
         {
             var session = await _sessionRepository.GetByTokenAsync(sessionToken);
+
             if (session == null || !session.IsActive || session.ExpiresAt <= DateTime.UtcNow)
             {
                 return null;
             }
 
-            var user = await _userRepository.GetByIdAsync(session.UserId);
+            var user = session.User;
             if (user == null || !user.IsActive)
             {
                 return null;
@@ -201,14 +168,15 @@ public class AuthService
                 ProfileImage = user.ProfileImage
             };
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine($"GetCurrentUser error: {ex.Message}");
             return null;
         }
     }
 
     private string GenerateSessionToken()
     {
-        return Convert.ToBase64String(Guid.NewGuid().ToByteArray()) + Convert.ToBase64String(Guid.NewGuid().ToByteArray());
+        return Guid.NewGuid().ToString() + DateTime.UtcNow.Ticks.ToString();
     }
 }

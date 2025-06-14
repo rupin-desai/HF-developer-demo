@@ -32,10 +32,9 @@ export const useAuth = () => {
 };
 
 // Use environment variable if available, fallback to hardcoded URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
-  (process.env.NODE_ENV === 'production' 
-    ? 'https://hf-developer-demo.onrender.com' 
-    : 'http://localhost:5000');
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://hf-developer-demo.onrender.com'
+  : 'http://localhost:8080'; // Note: Changed from 5000 to 8080
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

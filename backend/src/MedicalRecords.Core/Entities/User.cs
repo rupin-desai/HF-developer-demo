@@ -27,9 +27,12 @@ public class User
 
     public DateTime? LastLoginAt { get; set; }
 
+    // Add missing IsActive property
+    public bool IsActive { get; set; } = true;
+
     // Navigation properties
     public virtual ICollection<MedicalFile> MedicalFiles { get; set; } = new List<MedicalFile>();
-    public virtual ICollection<Session> Sessions { get; set; } = new List<Session>();
+    public virtual ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
 }
 
 public enum Gender
