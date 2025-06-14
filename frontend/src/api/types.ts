@@ -41,7 +41,7 @@ export interface FileUploadRequest {
 }
 
 // API Response Types
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {  // Change 'any' to 'unknown'
   success: boolean;
   message?: string;
   data?: T;

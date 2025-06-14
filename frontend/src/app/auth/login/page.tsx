@@ -31,20 +31,10 @@ export default function LoginPage() {
     setError("");
 
     try {
-      console.log("Attempting login...");
       const success = await login(formData.email, formData.password);
       
       if (success) {
-        console.log("Login successful, forcing immediate redirect and update");
-        
-        // 🔧 CRITICAL FIX: Force immediate state updates
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('forceProfileUpdate'));
-        }, 100);
-        
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 200);
+        router.push("/dashboard");
       } else {
         setError("Invalid email or password. Please check your credentials and try again.");
       }

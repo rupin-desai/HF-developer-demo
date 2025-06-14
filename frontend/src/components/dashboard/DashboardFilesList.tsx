@@ -2,7 +2,7 @@
 
 import { Eye, Download, Trash2, FileText, Image, File, Calendar, HardDrive, ExternalLink, AlertCircle } from "lucide-react";
 import { useState } from "react";
-import { getFileViewUrl, getFileStreamUrl, API_BASE_URL } from "@/api/apiConfig";
+import { getFileViewUrl } from "@/api/apiConfig";
 
 interface FileItem {
   id: string;

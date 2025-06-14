@@ -3,7 +3,6 @@ import type {
   User, 
   LoginRequest, 
   SignupRequest, 
-  UpdateProfileRequest,
   AuthResponse,
   ApiResponse 
 } from './types';
