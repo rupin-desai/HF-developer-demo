@@ -15,16 +15,16 @@ namespace MedicalRecords.Infrastructure.Migrations
                 name: "Users",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    FullName = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    Gender = table.Column<int>(type: "INTEGER", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
-                    PasswordHash = table.Column<string>(type: "TEXT", nullable: false),
-                    ProfileImage = table.Column<string>(type: "TEXT", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    LastLoginAt = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    FullName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    Email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    Gender = table.Column<int>(type: "integer", nullable: false),
+                    PhoneNumber = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    PasswordHash = table.Column<string>(type: "text", nullable: false),
+                    ProfileImage = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastLoginAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
@@ -35,14 +35,14 @@ namespace MedicalRecords.Infrastructure.Migrations
                 name: "MedicalFiles",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    FileType = table.Column<int>(type: "INTEGER", nullable: false),
-                    FilePath = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    FileSize = table.Column<long>(type: "INTEGER", nullable: false),
-                    UploadDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UserId = table.Column<string>(type: "TEXT", nullable: false),
-                    ContentType = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false)
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    FileType = table.Column<int>(type: "integer", nullable: false),
+                    FilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    FileSize = table.Column<long>(type: "bigint", nullable: false),
+                    UploadDate = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
+                    ContentType = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -59,15 +59,15 @@ namespace MedicalRecords.Infrastructure.Migrations
                 name: "UserSessions",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
-                    UserId = table.Column<string>(type: "TEXT", nullable: false),
-                    SessionToken = table.Column<string>(type: "TEXT", maxLength: 255, nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ExpiresAt = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    IpAddress = table.Column<string>(type: "TEXT", maxLength: 45, nullable: false),
-                    UserAgent = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    LastAccessedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
+                    SessionToken = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    ExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IpAddress = table.Column<string>(type: "character varying(45)", maxLength: 45, nullable: false),
+                    UserAgent = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    LastAccessedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {

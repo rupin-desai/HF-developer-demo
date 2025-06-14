@@ -93,12 +93,23 @@ public class AuthService
                 };
             }
 
+            // Parse gender with case-insensitive handling
+            Gender gender;
+            if (!Enum.TryParse<Gender>(request.Gender, true, out gender))
+            {
+                return new AuthResponse
+                {
+                    Success = false,
+                    Message = "Invalid gender value. Please use 'Male' or 'Female'"
+                };
+            }
+
             // Create new user
             var user = new User
             {
                 FullName = request.FullName,
                 Email = request.Email,
-                Gender = Enum.Parse<Gender>(request.Gender),
+                Gender = gender,
                 PhoneNumber = request.PhoneNumber,
                 PasswordHash = _passwordService.HashPassword(request.Password),
                 IsActive = true
