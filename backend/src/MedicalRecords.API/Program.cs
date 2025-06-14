@@ -45,10 +45,13 @@ builder.Services.AddDbContext<MedicalRecordsDbContext>(options =>
 // Add repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ISessionRepository, SessionRepository>();
+builder.Services.AddScoped<IMedicalFileRepository, MedicalFileRepository>();
 
 // Add services
 builder.Services.AddScoped<IPasswordService, PasswordService>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<FileService>();
 
 var app = builder.Build();
 
@@ -89,6 +92,9 @@ using (var scope = app.Services.CreateScope())
 app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
+
+// Add static file serving for uploads
+app.UseStaticFiles();
 
 // Add session authentication middleware
 app.UseMiddleware<SessionAuthenticationMiddleware>();

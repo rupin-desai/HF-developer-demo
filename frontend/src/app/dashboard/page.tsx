@@ -4,55 +4,15 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Save, User, Upload, FileText, Eye, Trash2, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useFiles } from "@/contexts/FileContext";
 
-type FileType = "Lab Report" | "Prescription" | "X-Ray" | "Blood Report" | "MRI Scan" | "CT Scan";
-
-interface MedicalFile {
-  id: string;
-  fileName: string;
-  fileType: FileType;
-  uploadDate: string;
-  fileUrl: string;
-  fileSize: string;
-  preview: string;
-}
-
-// Dummy files data
-const dummyFiles: MedicalFile[] = [
-  {
-    id: "1",
-    fileName: "Blood Test Results - January 2024",
-    fileType: "Blood Report",
-    uploadDate: "2024-01-15",
-    fileUrl: "/uploads/blood-report-jan-2024.pdf",
-    fileSize: "2.5 MB",
-    preview: "/images/file-icons/pdf-icon.svg"
-  },
-  {
-    id: "2",
-    fileName: "Chest X-Ray Analysis",
-    fileType: "X-Ray",
-    uploadDate: "2024-01-10",
-    fileUrl: "/uploads/chest-xray-2024.jpg",
-    fileSize: "5.2 MB",
-    preview: "/images/file-icons/image-icon.svg"
-  },
-  {
-    id: "3",
-    fileName: "Prescription - Antibiotics",
-    fileType: "Prescription",
-    uploadDate: "2024-01-08",
-    fileUrl: "/uploads/prescription-antibiotics.pdf",
-    fileSize: "1.8 MB",
-    preview: "/images/file-icons/pdf-icon.svg"
-  }
-];
+type FileType = "LabReport" | "Prescription" | "XRay" | "BloodReport" | "MRIScan" | "CTScan";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, updateProfile, isAuthenticated, isLoading } = useAuth();
+  const { files, uploadFile, deleteFile, downloadFile, refreshFiles, isLoading: filesLoading } = useFiles();
   
-  const [files, setFiles] = useState<MedicalFile[]>(dummyFiles);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState(user || {
     id: "",
@@ -63,7 +23,7 @@ export default function DashboardPage() {
     profileImage: ""
   });
   const [uploadFormData, setUploadFormData] = useState({
-    fileType: "Lab Report" as FileType,
+    fileType: "LabReport" as FileType,
     fileName: "",
     file: null as File | null
   });
@@ -81,6 +41,37 @@ export default function DashboardPage() {
       setProfileFormData(user);
     }
   }, [user]);
+
+  // Load files when component mounts
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshFiles();
+    }
+  }, [isAuthenticated, refreshFiles]);
+
+  // Show loading while checking authentication
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading if user not available
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Profile handlers
   const handleProfileInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -126,32 +117,44 @@ export default function DashboardPage() {
     }
   };
 
-  const handleFileUpload = (e: React.FormEvent) => {
+  const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (uploadFormData.file && uploadFormData.fileName) {
-      const newFile: MedicalFile = {
-        id: Date.now().toString(),
+      const success = await uploadFile({
         fileName: uploadFormData.fileName,
         fileType: uploadFormData.fileType,
-        uploadDate: new Date().toISOString().split('T')[0],
-        fileUrl: URL.createObjectURL(uploadFormData.file),
-        fileSize: `${(uploadFormData.file.size / 1024 / 1024).toFixed(2)} MB`,
-        preview: "/images/file-icons/pdf-icon.svg"
-      };
-      
-      setFiles(prev => [newFile, ...prev]);
-      setUploadFormData({
-        fileType: "Lab Report",
-        fileName: "",
-        file: null
+        file: uploadFormData.file
       });
-      console.log("File uploaded:", newFile);
+      
+      if (success) {
+        setUploadFormData({
+          fileType: "LabReport",
+          fileName: "",
+          file: null
+        });
+        // Reset the file input
+        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = '';
+        }
+        console.log("File uploaded successfully");
+      } else {
+        console.log("File upload failed");
+      }
     }
   };
 
-  const handleFileDelete = (fileId: string) => {
-    setFiles(prev => prev.filter(file => file.id !== fileId));
-    console.log("File deleted:", fileId);
+  const handleFileDelete = async (fileId: string) => {
+    const success = await deleteFile(fileId);
+    if (success) {
+      console.log("File deleted successfully");
+    } else {
+      console.log("File deletion failed");
+    }
+  };
+
+  const handleFileDownload = async (fileId: string, fileName: string) => {
+    await downloadFile(fileId, fileName);
   };
 
   const handleLogout = () => {
@@ -159,29 +162,17 @@ export default function DashboardPage() {
     router.push("/auth/login");
   };
 
-  // Show loading while checking authentication
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
-  // Show loading if user not available
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const formatDate = (dateString: string): string => {
+    return new Date(dateString).toLocaleDateString();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -367,12 +358,12 @@ export default function DashboardPage() {
                     onChange={handleUploadInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="Lab Report">Lab Report</option>
+                    <option value="LabReport">Lab Report</option>
                     <option value="Prescription">Prescription</option>
-                    <option value="X-Ray">X-Ray</option>
-                    <option value="Blood Report">Blood Report</option>
-                    <option value="MRI Scan">MRI Scan</option>
-                    <option value="CT Scan">CT Scan</option>
+                    <option value="XRay">X-Ray</option>
+                    <option value="BloodReport">Blood Report</option>
+                    <option value="MRIScan">MRI Scan</option>
+                    <option value="CTScan">CT Scan</option>
                   </select>
                 </div>
 
@@ -385,7 +376,7 @@ export default function DashboardPage() {
                     name="fileName"
                     value={uploadFormData.fileName}
                     onChange={handleUploadInputChange}
-                    placeholder="e.g., Ankit's Lab Report for Typhoid"
+                    placeholder="e.g., Blood Test Results - January 2024"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     required
                   />
@@ -425,9 +416,10 @@ export default function DashboardPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                  disabled={filesLoading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
                 >
-                  Submit File
+                  {filesLoading ? "Uploading..." : "Upload File"}
                 </button>
               </form>
             </div>
@@ -439,7 +431,12 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Uploaded Files</h2>
             
-            {files.length === 0 ? (
+            {filesLoading ? (
+              <div className="text-center py-8">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-500">Loading files...</p>
+              </div>
+            ) : files.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">No files uploaded yet</p>
@@ -456,13 +453,16 @@ export default function DashboardPage() {
                       {file.fileName}
                     </h3>
                     <p className="text-sm text-gray-600 mb-1">Type: {file.fileType}</p>
-                    <p className="text-sm text-gray-600 mb-1">Size: {file.fileSize}</p>
-                    <p className="text-sm text-gray-600 mb-3">Date: {file.uploadDate}</p>
+                    <p className="text-sm text-gray-600 mb-1">Size: {formatFileSize(file.fileSize)}</p>
+                    <p className="text-sm text-gray-600 mb-3">Date: {formatDate(file.uploadDate)}</p>
                     
                     <div className="flex space-x-2">
-                      <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1">
+                      <button 
+                        onClick={() => handleFileDownload(file.id, file.fileName)}
+                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
+                      >
                         <Eye className="w-3 h-3" />
-                        <span>View</span>
+                        <span>Download</span>
                       </button>
                       <button 
                         onClick={() => handleFileDelete(file.id)}
