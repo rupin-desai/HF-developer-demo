@@ -4,7 +4,6 @@ import { apiRequest, API_ENDPOINTS } from './apiConfig';
 import type { 
   User, 
   LoginRequest, 
-  SignupRequest, 
   AuthResponse,
   ApiResponse 
 } from './types';
@@ -95,8 +94,24 @@ const SessionStorage = {
   }
 };
 
+// 🔧 Types for backend responses
+interface LoginResponse {
+  success: boolean;
+  message: string;
+  user: User;
+  sessionToken?: string;
+}
+
+interface SignupData {
+  fullName: string;
+  email: string;
+  password: string;
+  gender: string;
+  phoneNumber: string;
+}
+
 // 🔧 Helper function to safely parse JSON responses
-const safeJsonParse = async (response: Response): Promise<any> => {
+const safeJsonParse = async <T = Record<string, unknown>>(response: Response): Promise<T> => {
   try {
     // Clone the response to avoid stream consumption issues
     const responseClone = response.clone();
@@ -107,11 +122,11 @@ const safeJsonParse = async (response: Response): Promise<any> => {
     // Check if response is empty
     if (!text || text.trim() === '') {
       console.log('Empty response received');
-      return { success: false, message: 'Empty response from server' };
+      return { success: false, message: 'Empty response from server' } as T;
     }
     
     // Try to parse as JSON
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(text) as T;
     console.log('Parsed JSON response:', parsed);
     return parsed;
   } catch (error) {
@@ -126,7 +141,7 @@ const safeJsonParse = async (response: Response): Promise<any> => {
       console.error('Could not read response text:', textError);
     }
     
-    return { success: false, message: 'Invalid response format from server' };
+    return { success: false, message: 'Invalid response format from server' } as T;
   }
 };
 
@@ -177,18 +192,16 @@ export class AuthService {
         // Try to verify with server in background (don't wait for it)
         setTimeout(async () => {
           try {
+            // 🔧 FIX: Use cookies only - backend expects session_token cookie
             const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
-              credentials: 'include',
-              headers: {
-                'Authorization': `Bearer ${SessionStorage.getToken() || ''}`,
-              }
+              credentials: 'include', // This sends the session_token cookie
             });
             
             if (response.ok) {
-              const data: ApiResponse<User> = await safeJsonParse(response);
-              if (data.success && data.data) {
+              const userData = await safeJsonParse<User>(response);
+              if (userData && userData.id) {
                 console.log("Background auth verification successful");
-                SessionStorage.setUser(data.data);
+                SessionStorage.setUser(userData);
               }
             }
           } catch (error) {
@@ -201,23 +214,24 @@ export class AuthService {
       
       // No cached user, try server verification
       try {
+        // 🔧 FIX: Use cookies only - backend expects session_token cookie
         const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
-          credentials: 'include',
-          headers: {
-            'Authorization': `Bearer ${SessionStorage.getToken() || ''}`,
-          }
+          credentials: 'include', // This sends the session_token cookie
         });
         
         console.log(`Auth check response status: ${response.status}`);
         
         if (response.ok) {
-          const data: ApiResponse<User> = await safeJsonParse(response);
+          const userData = await safeJsonParse<User>(response);
           
-          if (data.success && data.data) {
-            console.log("Server auth check successful:", data.data);
-            SessionStorage.setUser(data.data);
-            return data.data;
+          if (userData && userData.id) {
+            console.log("Server auth check successful:", userData);
+            SessionStorage.setUser(userData);
+            return userData;
           }
+        } else if (response.status === 401) {
+          console.log('Unauthorized - clearing cached session');
+          SessionStorage.clearSession();
         }
       } catch (error) {
         console.log('Server auth check failed:', error);
@@ -259,7 +273,7 @@ export class AuthService {
 
       // Handle non-OK responses first
       if (!response.ok) {
-        const errorData = await safeJsonParse(response);
+        const errorData = await safeJsonParse<{ message?: string }>(response);
         console.error('Login failed with status:', response.status, errorData);
         return { 
           success: false, 
@@ -269,7 +283,7 @@ export class AuthService {
       }
 
       // Parse successful response
-      const data: any = await safeJsonParse(response);
+      const data = await safeJsonParse<LoginResponse>(response);
       console.log('Login response data:', data);
 
       // 🔧 FIX: Check the actual response structure from your backend
@@ -279,20 +293,10 @@ export class AuthService {
         // Store user data
         SessionStorage.setUser(data.user);
         
-        // Store session token if provided
+        // Store session token if provided (though backend uses cookies)
         if (data.sessionToken) {
           console.log('Session token found in response');
           SessionStorage.setToken(data.sessionToken);
-        }
-        
-        // Extract additional session token from response headers
-        const headerToken = response.headers.get('Authorization') || 
-                           response.headers.get('X-Session-Token') ||
-                           response.headers.get('Set-Cookie');
-        
-        if (headerToken) {
-          console.log('Additional session token found in headers');
-          SessionStorage.setToken(headerToken);
         }
         
         // Dispatch events
@@ -329,12 +333,10 @@ export class AuthService {
     console.log('Logging out user...');
     
     try {
+      // 🔧 FIX: Use cookies only - backend expects session_token cookie
       const response = await apiRequest(API_ENDPOINTS.AUTH.LOGOUT, {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${SessionStorage.getToken() || ''}`,
-        }
+        credentials: 'include', // This sends the session_token cookie
       });
       
       console.log(`Logout response status: ${response.status}`);
@@ -357,7 +359,7 @@ export class AuthService {
   /**
    * Signup user
    */
-  static async signup(userData: Omit<User, 'id' | 'profileImage'> & { password: string }): Promise<boolean> {
+  static async signup(userData: SignupData): Promise<boolean> {
     console.log('Attempting signup for:', userData.email);
     
     try {
@@ -373,15 +375,16 @@ export class AuthService {
 
       if (response.ok) {
         try {
-          const data = await safeJsonParse(response);
+          const data = await safeJsonParse<{ message?: string }>(response);
           console.log('Signup successful:', data.message);
           return true;
-        } catch (parseError) {
+        } catch {
+          // Response might be empty for successful signup
           console.log('Signup successful (empty response)');
           return true;
         }
       } else {
-        const errorData = await safeJsonParse(response);
+        const errorData = await safeJsonParse<{ message?: string }>(response);
         console.error('Signup failed:', errorData.message);
         return false;
       }
@@ -413,29 +416,27 @@ export class AuthService {
         console.log('Profile picture added to form data');
       }
 
+      // 🔧 FIX: Use cookies only - backend expects session_token cookie
       const response = await apiRequest(API_ENDPOINTS.PROFILE.UPDATE, {
         method: 'PUT',
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${SessionStorage.getToken() || ''}`,
-        },
+        credentials: 'include', // This sends the session_token cookie
         body: formData,
       });
 
       console.log(`Profile update response status: ${response.status}`);
 
       if (!response.ok) {
-        const errorData = await safeJsonParse(response);
+        const errorData = await safeJsonParse<{ message?: string }>(response);
         console.error('Profile update failed:', errorData.message);
         return { 
           success: false, 
-          user: undefined, // 🔧 FIX: Use undefined instead of null
+          user: undefined,
           message: errorData.message || 'Profile update failed' 
         };
       }
 
       // Safely parse JSON response
-      const data: ApiResponse<User> = await safeJsonParse(response);
+      const data = await safeJsonParse<ApiResponse<User>>(response);
 
       if (data.success && data.data) {
         console.log('Profile update successful:', data.data);
@@ -462,7 +463,7 @@ export class AuthService {
         console.error('Profile update failed:', data.message);
         return { 
           success: false, 
-          user: undefined, // 🔧 FIX: Use undefined instead of null
+          user: undefined,
           message: data.message || 'Profile update failed' 
         };
       }
@@ -470,7 +471,7 @@ export class AuthService {
       console.error('Profile update error:', error);
       return { 
         success: false, 
-        user: undefined, // 🔧 FIX: Use undefined instead of null
+        user: undefined,
         message: 'Network error during profile update' 
       };
     }
@@ -483,23 +484,21 @@ export class AuthService {
     console.log('Force refreshing user data...');
     
     try {
+      // 🔧 FIX: Use cookies only - backend expects session_token cookie
       const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${SessionStorage.getToken() || ''}`,
-        }
+        credentials: 'include', // This sends the session_token cookie
       });
 
       if (response.ok) {
-        const data: ApiResponse<User> = await safeJsonParse(response);
-        if (data.success && data.data) {
-          console.log('User data refreshed successfully:', data.data);
-          SessionStorage.setUser(data.data);
+        const userData = await safeJsonParse<User>(response);
+        if (userData && userData.id) {
+          console.log('User data refreshed successfully:', userData);
+          SessionStorage.setUser(userData);
           
           // Dispatch refresh event
-          dispatchUserEvents(data.data);
+          dispatchUserEvents(userData);
           
-          return data.data;
+          return userData;
         }
       }
       
