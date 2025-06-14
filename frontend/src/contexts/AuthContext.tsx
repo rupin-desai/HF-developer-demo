@@ -83,19 +83,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const userData = await response.json();
         console.log("Login successful, setting user data:", userData);
         
-        // 🔧 IMPROVED: Set user data and trigger multiple events
+        // 🔧 CRITICAL FIX: Set user state first
         setUser(userData);
         
-        // Dispatch multiple events with different timings to ensure everything updates
+        // 🔧 CRITICAL FIX: Use multiple event dispatches with user data
         setTimeout(() => {
-          console.log("Dispatching userLoggedIn event");
-          window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: userData }));
+          console.log("Dispatching userLoggedIn event with data:", userData);
+          window.dispatchEvent(new CustomEvent('userLoggedIn', { 
+            detail: userData 
+          }));
         }, 50);
         
         setTimeout(() => {
-          console.log("Dispatching user state change event");
-          window.dispatchEvent(new CustomEvent('userStateChanged', { detail: userData }));
-        }, 100);
+          console.log("Dispatching userStateChanged event");
+          window.dispatchEvent(new CustomEvent('userStateChanged', { 
+            detail: userData 
+          }));
+        }, 150);
+        
+        // 🔧 NEW: Force React state update
+        setTimeout(() => {
+          console.log("Force user context update");
+          setUser((prevUser) => ({ ...userData }));
+        }, 250);
         
         return true;
       } else {

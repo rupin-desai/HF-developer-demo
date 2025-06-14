@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Save, User, Upload, FileText, Eye, Download, Trash2, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,12 +35,26 @@ export default function DashboardPage() {
     phoneNumber: "",
     profileImage: ""
   });
-  
   const [uploadFormData, setUploadFormData] = useState({
     fileType: "LabReport" as FileType,
     fileName: "",
     file: null as File | null
   });
+
+  // 🔧 CRITICAL FIX: Function to update profile form data
+  const updateProfileFormData = useCallback((userData: any) => {
+    if (userData) {
+      console.log("Updating profile form with:", userData);
+      setProfileFormData({
+        id: userData.id || "",
+        fullName: userData.fullName || "",
+        email: userData.email || "",
+        gender: (userData.gender as Gender) || "male",
+        phoneNumber: userData.phoneNumber || "",
+        profileImage: userData.profileImage || ""
+      });
+    }
+  }, []);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -49,43 +63,67 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // 🔧 IMPROVED: Update profile form immediately when user data changes
+  // 🔧 IMPROVED: Update profile form when user changes
   useEffect(() => {
     if (user) {
       console.log("User data changed, updating profile form:", user);
-      setProfileFormData({
-        id: user.id || "",
-        fullName: user.fullName || "",
-        email: user.email || "",
-        gender: (user.gender as Gender) || "male",
-        phoneNumber: user.phoneNumber || "",
-        profileImage: user.profileImage || ""
-      });
+      updateProfileFormData(user);
     }
-  }, [user]);
+  }, [user, updateProfileFormData]);
 
-  // 🔧 IMPROVED: Listen for login events and force state update
+  // 🔧 CRITICAL FIX: Listen for ALL login events
   useEffect(() => {
-    const handleUserLoggedIn = () => {
-      console.log("Login event detected, forcing profile refresh");
-      // Force a slight delay to ensure user context is updated
-      setTimeout(() => {
-        if (user) {
-          setProfileFormData({
-            id: user.id || "",
-            fullName: user.fullName || "",
-            email: user.email || "",
-            gender: (user.gender as Gender) || "male",
-            phoneNumber: user.phoneNumber || "",
-            profileImage: user.profileImage || ""
-          });
-        }
-      }, 100);
+    const handleUserLoggedIn = (event: any) => {
+      console.log("UserLoggedIn event received:", event.detail);
+      const userData = event.detail;
+      if (userData) {
+        updateProfileFormData(userData);
+      }
     };
 
+    const handleUserStateChanged = (event: any) => {
+      console.log("UserStateChanged event received:", event.detail);
+      const userData = event.detail;
+      if (userData) {
+        updateProfileFormData(userData);
+      }
+    };
+
+    const handleStorageChange = () => {
+      console.log("Storage changed, checking for user data");
+      // Force refresh if needed
+      if (user) {
+        updateProfileFormData(user);
+      }
+    };
+
+    // Listen to multiple events
     window.addEventListener('userLoggedIn', handleUserLoggedIn);
-    return () => window.removeEventListener('userLoggedIn', handleUserLoggedIn);
-  }, [user]);
+    window.addEventListener('userStateChanged', handleUserStateChanged);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('userLoggedIn', handleUserLoggedIn);
+      window.removeEventListener('userStateChanged', handleUserStateChanged);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [updateProfileFormData, user]);
+
+  // Add this to your dashboard useEffect section
+  useEffect(() => {
+    const handleForceUpdate = () => {
+      console.log("Force update triggered");
+      if (user) {
+        updateProfileFormData(user);
+      }
+    };
+
+    window.addEventListener('forceProfileUpdate', handleForceUpdate);
+    
+    return () => {
+      window.removeEventListener('forceProfileUpdate', handleForceUpdate);
+    };
+  }, [user, updateProfileFormData]);
 
   // Load files when user becomes authenticated
   useEffect(() => {
