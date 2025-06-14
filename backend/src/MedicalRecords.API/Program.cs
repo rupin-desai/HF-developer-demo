@@ -27,22 +27,21 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 if (!string.IsNullOrEmpty(databaseUrl))
 {
     // Parse Render's PostgreSQL URL format
-    // Example: postgres://username:password@hostname:port/database
     try
     {
         var uri = new Uri(databaseUrl);
         var npgsqlConnectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.LocalPath.TrimStart('/')};Username={uri.UserInfo.Split(':')[0]};Password={uri.UserInfo.Split(':')[1]};SSL Mode=Require;Trust Server Certificate=true";
-
+        
         builder.Services.AddDbContext<MedicalRecordsDbContext>(options =>
             options.UseNpgsql(npgsqlConnectionString));
-
+            
         Console.WriteLine($"Using PostgreSQL database: {uri.Host}");
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Error parsing DATABASE_URL: {ex.Message}");
         Console.WriteLine($"DATABASE_URL format: {databaseUrl}");
-
+        
         // Fallback to SQLite if DATABASE_URL parsing fails
         builder.Services.AddDbContext<MedicalRecordsDbContext>(options =>
             options.UseSqlite("Data Source=medical_records.db"));
@@ -77,10 +76,18 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Add your services
+// Register Infrastructure Services
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
+
+// Register Repositories
 builder.Services.AddScoped<IMedicalFileRepository, MedicalFileRepository>();
+builder.Services.AddScoped<ISessionRepository, SessionRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// Register Application Services
 builder.Services.AddScoped<FileService>();
+builder.Services.AddScoped<AuthService>();
 
 var app = builder.Build();
 
@@ -116,13 +123,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<MedicalRecordsDbContext>();
-
+        
         // Test database connection first
         await context.Database.CanConnectAsync();
-
+        
         // Apply migrations
         await context.Database.MigrateAsync();
-
+        
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogInformation("Database migration completed successfully");
     }
@@ -130,7 +137,7 @@ using (var scope = app.Services.CreateScope())
     {
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "An error occurred while migrating the database.");
-
+        
         // Don't throw in production - let the app start and handle gracefully
         if (app.Environment.IsDevelopment())
         {
