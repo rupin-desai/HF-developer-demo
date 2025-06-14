@@ -96,6 +96,7 @@ public class FileService
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"File upload error: {ex.Message}");
             return new FileResponse
             {
                 Success = false,
@@ -130,6 +131,7 @@ public class FileService
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"File service error: {ex.Message}");
             return new FileListResponse
             {
                 Success = false,

@@ -90,6 +90,7 @@ public class AuthService
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Login error: {ex.Message}");
             return new AuthResponse
             {
                 Success = false,
@@ -152,11 +153,8 @@ public class AuthService
         }
         catch (Exception ex)
         {
-            return new AuthResponse
-            {
-                Success = false,
-                Message = "An error occurred during signup"
-            };
+            Console.WriteLine($"Auth service error: {ex.Message}");
+            return false; // or appropriate return value based on method
         }
     }
 

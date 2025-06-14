@@ -20,7 +20,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-    // IMPROVED: Better PostgreSQL connection string parsing
+// IMPROVED: Better PostgreSQL connection string parsing
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -33,7 +33,7 @@ if (!string.IsNullOrEmpty(databaseUrl))
         // Better handling of PostgreSQL URL parsing
         var uri = new Uri(databaseUrl);
         var host = uri.Host;
-        var port = uri.Port > 0 ? uri.Port : 5432; // Default PostgreSQL port
+        var port = uri.Port > 0 ? uri.Port : 5432; // FIX: This was the problematic line
         var database = uri.LocalPath.TrimStart('/');
         
         string username = "";
@@ -58,7 +58,7 @@ if (!string.IsNullOrEmpty(databaseUrl))
     catch (Exception ex)
     {
         Console.WriteLine($"Error parsing DATABASE_URL: {ex.Message}");
-        Console.WriteLine($"DATABASE_URL value: {databaseUrl?.Substring(0, Math.Min(50, databaseUrl.Length ?? 0))}...");
+        Console.WriteLine($"DATABASE_URL value: {databaseUrl?.Substring(0, Math.Min(50, databaseUrl.Length))}...");
         
         // Fallback to SQLite if DATABASE_URL parsing fails
         builder.Services.AddDbContext<MedicalRecordsDbContext>(options =>

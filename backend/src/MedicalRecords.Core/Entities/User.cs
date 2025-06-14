@@ -15,22 +15,21 @@ public class User
 
     public Gender Gender { get; set; }
 
+    [Required]
     public string PhoneNumber { get; set; } = string.Empty;
-
-    public string ProfileImage { get; set; } = string.Empty;
 
     [Required]
     public string PasswordHash { get; set; } = string.Empty;
+
+    public string ProfileImage { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? LastLoginAt { get; set; }
 
-    public bool IsActive { get; set; } = true;
-
-    // Navigation property
-    public virtual ICollection<UserSession> Sessions { get; set; } = new List<UserSession>();
+    // Navigation properties
     public virtual ICollection<MedicalFile> MedicalFiles { get; set; } = new List<MedicalFile>();
+    public virtual ICollection<Session> Sessions { get; set; } = new List<Session>();
 }
 
 public enum Gender
