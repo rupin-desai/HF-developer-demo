@@ -60,7 +60,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Force React state update
         setTimeout(() => {
           console.log("Force user context update");
-          setUser((_prevUser) => ({ ...result.user! }));
+          setUser(() => ({ ...result.user! }));
         }, 250);
         
         return true;

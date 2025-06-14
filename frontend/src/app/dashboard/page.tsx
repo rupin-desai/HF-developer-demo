@@ -26,6 +26,15 @@ interface ProfileFormData {
   profileImage: string;
 }
 
+interface UserEventDetail {
+  id?: string;
+  fullName?: string;
+  email?: string;
+  gender?: Gender;
+  phoneNumber?: string;
+  profileImage?: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, updateProfile, isAuthenticated, isLoading } = useAuth();
@@ -57,7 +66,7 @@ export default function DashboardPage() {
   const maxFileSize = 10; // MB
 
   // Function to update profile form data
-  const updateProfileFormData = useCallback((userData: any) => {
+  const updateProfileFormData = useCallback((userData: UserEventDetail) => {
     if (userData) {
       console.log("Updating profile form with:", userData);
       setProfileFormData({
@@ -88,7 +97,7 @@ export default function DashboardPage() {
 
   // Listen for ALL login events
   useEffect(() => {
-    const handleUserLoggedIn = (event: any) => {
+    const handleUserLoggedIn = (event: CustomEvent<UserEventDetail>) => {
       console.log("UserLoggedIn event received:", event.detail);
       const userData = event.detail;
       if (userData) {
@@ -96,7 +105,7 @@ export default function DashboardPage() {
       }
     };
 
-    const handleUserStateChanged = (event: any) => {
+    const handleUserStateChanged = (event: CustomEvent<UserEventDetail>) => {
       console.log("UserStateChanged event received:", event.detail);
       const userData = event.detail;
       if (userData) {
@@ -104,7 +113,7 @@ export default function DashboardPage() {
       }
     };
 
-    const handleProfileUpdated = (event: any) => {
+    const handleProfileUpdated = (event: CustomEvent<UserEventDetail>) => {
       console.log("UserProfileUpdated event received:", event.detail);
       const userData = event.detail;
       if (userData) {
@@ -115,14 +124,14 @@ export default function DashboardPage() {
       }
     };
 
-    window.addEventListener('userLoggedIn', handleUserLoggedIn);
-    window.addEventListener('userStateChanged', handleUserStateChanged);
-    window.addEventListener('userProfileUpdated', handleProfileUpdated);
+    window.addEventListener('userLoggedIn', handleUserLoggedIn as EventListener);
+    window.addEventListener('userStateChanged', handleUserStateChanged as EventListener);
+    window.addEventListener('userProfileUpdated', handleProfileUpdated as EventListener);
     
     return () => {
-      window.removeEventListener('userLoggedIn', handleUserLoggedIn);
-      window.removeEventListener('userStateChanged', handleUserStateChanged);
-      window.removeEventListener('userProfileUpdated', handleProfileUpdated);
+      window.removeEventListener('userLoggedIn', handleUserLoggedIn as EventListener);
+      window.removeEventListener('userStateChanged', handleUserStateChanged as EventListener);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdated as EventListener);
     };
   }, [updateProfileFormData]);
 
