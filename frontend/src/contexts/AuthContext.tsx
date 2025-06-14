@@ -6,10 +6,9 @@ interface User {
   id: string;
   fullName: string;
   email: string;
-  gender: "male" | "female"; // 🔧 FIXED: Allow both values
+  gender: "male" | "female";
   phoneNumber: string;
   profileImage: string;
-  // Add any other user properties you have
 }
 
 interface AuthContextType {
@@ -18,8 +17,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (userData: Omit<User, 'id' | 'profileImage'> & { password: string }) => Promise<boolean>;
-  logout: () => void;
-  updateProfile: (userData: Partial<User>) => void;
+  logout: () => Promise<void>;
+  updateProfile: (userData: Partial<User>, profilePicture?: File) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,7 +34,7 @@ export const useAuth = () => {
 // Use environment variable if available, fallback to hardcoded URL
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://hf-developer-demo.onrender.com'
-  : 'http://localhost:8080'; // Note: Changed from 5000 to 8080
+  : 'http://localhost:8080';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -152,9 +151,56 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const updateProfile = (userData: Partial<User>) => {
-    if (user) {
-      setUser({ ...user, ...userData });
+  // 🔧 NEW: Connect to backend profile update API
+  const updateProfile = async (userData: Partial<User>, profilePicture?: File): Promise<boolean> => {
+    try {
+      const formData = new FormData();
+      
+      // Add user data to form
+      if (userData.fullName) formData.append('fullName', userData.fullName);
+      if (userData.email) formData.append('email', userData.email);
+      if (userData.gender) formData.append('gender', userData.gender);
+      if (userData.phoneNumber) formData.append('phoneNumber', userData.phoneNumber);
+      
+      // Add profile picture if provided
+      if (profilePicture) {
+        formData.append('profilePicture', profilePicture);
+      } else if (user?.profileImage) {
+        formData.append('existingProfileImage', user.profileImage);
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/profile/update`, {
+        method: 'PUT',
+        credentials: 'include',
+        body: formData
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.user) {
+          console.log("Profile updated successfully:", result.user);
+          setUser(result.user);
+          
+          // Dispatch update events
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
+              detail: result.user 
+            }));
+          }, 50);
+          
+          return true;
+        } else {
+          console.error('Profile update failed:', result.message);
+          return false;
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Profile update failed:', errorData.message);
+        return false;
+      }
+    } catch (error) {
+      console.error('Profile update error:', error);
+      return false;
     }
   };
 

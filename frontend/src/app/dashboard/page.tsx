@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Save, User, Upload, FileText, Eye, Download, Trash2, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,10 +8,8 @@ import { useFiles } from "@/contexts/FileContext";
 
 type FileType = "LabReport" | "Prescription" | "XRay" | "BloodReport" | "MRIScan" | "CTScan";
 
-// 🔧 FIXED: Define proper gender type
 type Gender = "male" | "female";
 
-// 🔧 FIXED: Define profile form data interface
 interface ProfileFormData {
   id: string;
   fullName: string;
@@ -35,13 +33,20 @@ export default function DashboardPage() {
     phoneNumber: "",
     profileImage: ""
   });
+  
   const [uploadFormData, setUploadFormData] = useState({
     fileType: "LabReport" as FileType,
     fileName: "",
     file: null as File | null
   });
 
-  // 🔧 CRITICAL FIX: Function to update profile form data
+  // Profile picture state
+  const [selectedProfilePicture, setSelectedProfilePicture] = useState<File | null>(null);
+  const [profilePicturePreview, setProfilePicturePreview] = useState<string>("");
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Function to update profile form data
   const updateProfileFormData = useCallback((userData: any) => {
     if (userData) {
       console.log("Updating profile form with:", userData);
@@ -63,7 +68,7 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // 🔧 IMPROVED: Update profile form when user changes
+  // Update profile form when user changes
   useEffect(() => {
     if (user) {
       console.log("User data changed, updating profile form:", user);
@@ -71,7 +76,7 @@ export default function DashboardPage() {
     }
   }, [user, updateProfileFormData]);
 
-  // 🔧 CRITICAL FIX: Listen for ALL login events
+  // Listen for ALL login events
   useEffect(() => {
     const handleUserLoggedIn = (event: any) => {
       console.log("UserLoggedIn event received:", event.detail);
@@ -89,41 +94,27 @@ export default function DashboardPage() {
       }
     };
 
-    const handleStorageChange = () => {
-      console.log("Storage changed, checking for user data");
-      // Force refresh if needed
-      if (user) {
-        updateProfileFormData(user);
+    const handleProfileUpdated = (event: any) => {
+      console.log("UserProfileUpdated event received:", event.detail);
+      const userData = event.detail;
+      if (userData) {
+        updateProfileFormData(userData);
+        setIsEditingProfile(false);
+        setSelectedProfilePicture(null);
+        setProfilePicturePreview("");
       }
     };
 
-    // Listen to multiple events
     window.addEventListener('userLoggedIn', handleUserLoggedIn);
     window.addEventListener('userStateChanged', handleUserStateChanged);
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('userProfileUpdated', handleProfileUpdated);
     
     return () => {
       window.removeEventListener('userLoggedIn', handleUserLoggedIn);
       window.removeEventListener('userStateChanged', handleUserStateChanged);
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('userProfileUpdated', handleProfileUpdated);
     };
-  }, [updateProfileFormData, user]);
-
-  // Add this to your dashboard useEffect section
-  useEffect(() => {
-    const handleForceUpdate = () => {
-      console.log("Force update triggered");
-      if (user) {
-        updateProfileFormData(user);
-      }
-    };
-
-    window.addEventListener('forceProfileUpdate', handleForceUpdate);
-    
-    return () => {
-      window.removeEventListener('forceProfileUpdate', handleForceUpdate);
-    };
-  }, [user, updateProfileFormData]);
+  }, [updateProfileFormData]);
 
   // Load files when user becomes authenticated
   useEffect(() => {
@@ -162,17 +153,59 @@ export default function DashboardPage() {
     const { name, value } = e.target;
     setProfileFormData(prev => ({
       ...prev,
-      [name]: name === 'gender' ? value as Gender : value // Type assertion for gender
+      [name]: name === 'gender' ? value as Gender : value
     }));
   };
 
-  const handleProfileSave = () => {
-    updateProfile(profileFormData);
-    setIsEditingProfile(false);
-    console.log("Profile updated:", profileFormData);
+  // Profile picture handlers
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Please select a valid image file (JPEG, PNG, or GIF)');
+        return;
+      }
+
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File size must be less than 5MB');
+        return;
+      }
+
+      setSelectedProfilePicture(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setProfilePicturePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
-  // 🔧 FIXED: Improve cancel handler with proper typing
+  const handleProfilePictureClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleProfileSave = async () => {
+    setIsUpdatingProfile(true);
+    try {
+      const success = await updateProfile(profileFormData, selectedProfilePicture || undefined);
+      if (success) {
+        console.log("Profile updated successfully");
+      } else {
+        alert("Failed to update profile. Please try again.");
+      }
+    } catch (error) {
+      console.error("Profile update error:", error);
+      alert("An error occurred while updating your profile.");
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
   const handleProfileCancel = () => {
     if (user) {
       setProfileFormData({
@@ -185,6 +218,8 @@ export default function DashboardPage() {
       });
     }
     setIsEditingProfile(false);
+    setSelectedProfilePicture(null);
+    setProfilePicturePreview("");
   };
 
   // File upload handlers
@@ -220,235 +255,206 @@ export default function DashboardPage() {
           fileName: "",
           file: null
         });
-        // Reset the file input
+        // Reset file input
         const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-        if (fileInput) {
-          fileInput.value = '';
-        }
-        console.log("File uploaded successfully");
-      } else {
-        console.log("File upload failed");
+        if (fileInput) fileInput.value = '';
       }
     }
   };
 
-  const handleFileDelete = async (fileId: string) => {
-    const success = await deleteFile(fileId);
-    if (success) {
-      console.log("File deleted successfully");
-    } else {
-      console.log("File deletion failed");
+  const getProfileImageUrl = () => {
+    if (profilePicturePreview) {
+      return profilePicturePreview;
     }
-  };
-
-  const handleFileDownload = async (fileId: string, fileName: string) => {
-    await downloadFile(fileId, fileName);
-  };
-
-  const handleFileView = (fileId: string) => {
-    viewFile(fileId);
-  };
-
-  const handleLogout = () => {
-    logout();
-    router.push("/auth/login");
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString();
+    if (user.profileImage) {
+      return `http://localhost:8080/staticfiles/${user.profileImage}`;
+    }
+    return null;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo and Title */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <User className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  Medical Records Dashboard
-                </h1>
-                <p className="text-sm text-gray-600">Secure Health Management</p>
-              </div>
-            </div>
-
-            {/* User Menu */}
+    <div className="min-h-screen bg-gray-100">
+      {/* 🔄 REVERTED: Original Header Design */}
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <h1 className="text-3xl font-bold text-gray-900">Medical Records Dashboard</h1>
             <div className="flex items-center space-x-4">
-              <div className="hidden md:block text-right">
-                <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
-                <p className="text-xs text-gray-600">{user.email}</p>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors">
-                  <Settings className="w-5 h-5" />
-                </button>
-                
-                <button 
-                  onClick={handleLogout}
-                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
+              <span className="text-gray-700">Welcome, {user.fullName}</span>
+              <button
+                onClick={() => logout()}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors duration-200"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
       </header>
-      
-      <main className="container mx-auto px-4 py-6">
-        {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          
-          {/* Left Sidebar - User Profile */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+
+      {/* 🔄 REVERTED: Original Main Content Layout */}
+      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div className="px-4 py-6 sm:px-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* 🔄 REVERTED: Original Profile Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">User Profile</h2>
+                <h2 className="text-2xl font-semibold text-gray-900">Profile</h2>
                 {!isEditingProfile && (
                   <button
                     onClick={() => setIsEditingProfile(true)}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md transition-colors duration-200"
                   >
                     Edit Profile
                   </button>
                 )}
               </div>
 
-              {/* Profile Image */}
-              <div className="flex flex-col items-center mb-6">
-                <div className="relative w-24 h-24 mb-4">
-                  <div className="w-full h-full bg-gray-200 rounded-full overflow-hidden">
-                    <div className="w-full h-full flex items-center justify-center bg-gray-300">
-                      <User className="w-12 h-12 text-gray-600" />
-                    </div>
-                  </div>
-                  
-                  {isEditingProfile && (
-                    <label className="absolute bottom-0 right-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-700 transition-colors">
-                      <Camera className="w-4 h-4 text-white" />
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
+              {/* Profile Picture Section */}
+              <div className="flex items-center space-x-4 mb-6">
+                <div className="relative">
+                  <div className="w-20 h-20 bg-gray-300 rounded-full flex items-center justify-center overflow-hidden">
+                    {getProfileImageUrl() ? (
+                      <img 
+                        src={getProfileImageUrl()!} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover"
                       />
-                    </label>
+                    ) : (
+                      <User className="w-10 h-10 text-gray-600" />
+                    )}
+                  </div>
+                  {isEditingProfile && (
+                    <button
+                      onClick={handleProfilePictureClick}
+                      className="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white hover:bg-blue-600 transition-colors duration-200"
+                    >
+                      <Camera className="w-3 h-3" />
+                    </button>
                   )}
                 </div>
-                
-                <h3 className="font-medium text-gray-900">{profileFormData.fullName}</h3>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">{user.fullName}</h3>
+                  <p className="text-gray-600">{user.email}</p>
+                </div>
               </div>
 
-              {/* Profile Form */}
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleProfilePictureChange}
+                accept="image/*"
+                className="hidden"
+              />
+
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={profileFormData.fullName}
-                    onChange={handleProfileInputChange}
-                    disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-600"
-                  />
+                  <label className="block text-sm font-medium text-gray-700">Full Name</label>
+                  {isEditingProfile ? (
+                    <input
+                      type="text"
+                      name="fullName"
+                      value={profileFormData.fullName}
+                      onChange={handleProfileInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  ) : (
+                    <p className="mt-1 text-gray-900">{user.fullName}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={profileFormData.email}
-                    onChange={handleProfileInputChange}
-                    disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-600"
-                  />
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  {isEditingProfile ? (
+                    <input
+                      type="email"
+                      name="email"
+                      value={profileFormData.email}
+                      onChange={handleProfileInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  ) : (
+                    <p className="mt-1 text-gray-900">{user.email}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Gender
-                  </label>
-                  <select
-                    name="gender"
-                    value={profileFormData.gender}
-                    onChange={handleProfileInputChange}
-                    disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-600"
-                  >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700">Gender</label>
+                  {isEditingProfile ? (
+                    <select
+                      name="gender"
+                      value={profileFormData.gender}
+                      onChange={handleProfileInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  ) : (
+                    <p className="mt-1 text-gray-900 capitalize">{user.gender}</p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    name="phoneNumber"
-                    value={profileFormData.phoneNumber}
-                    onChange={handleProfileInputChange}
-                    disabled={!isEditingProfile}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-600"
-                  />
+                  <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                  {isEditingProfile ? (
+                    <input
+                      type="tel"
+                      name="phoneNumber"
+                      value={profileFormData.phoneNumber}
+                      onChange={handleProfileInputChange}
+                      className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    />
+                  ) : (
+                    <p className="mt-1 text-gray-900">{user.phoneNumber}</p>
+                  )}
                 </div>
+
+                {isEditingProfile && (
+                  <div className="flex space-x-3 pt-4">
+                    <button
+                      onClick={handleProfileSave}
+                      disabled={isUpdatingProfile}
+                      className="flex-1 bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-md transition-colors duration-200 flex items-center justify-center"
+                    >
+                      {isUpdatingProfile ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Updating...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-2" />
+                          Save
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleProfileCancel}
+                      disabled={isUpdatingProfile}
+                      className="flex-1 bg-gray-500 hover:bg-gray-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-md transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {/* Action Buttons */}
-              {isEditingProfile && (
-                <div className="flex space-x-3 mt-6">
-                  <button
-                    onClick={handleProfileSave}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center space-x-2"
-                  >
-                    <Save className="w-4 h-4" />
-                    <span>Save Changes</span>
-                  </button>
-                  <button
-                    onClick={handleProfileCancel}
-                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
             </div>
-          </div>
-          
-          {/* Right Sidebar - File Upload */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Upload Medical File</h2>
+
+            {/* 🔄 REVERTED: Original File Upload Section */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-2xl font-semibold text-gray-900 mb-6">Upload File</h2>
               
               <form onSubmit={handleFileUpload} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    File Type
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700">File Type</label>
                   <select
                     name="fileType"
                     value={uploadFormData.fileType}
                     onChange={handleUploadInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="LabReport">Lab Report</option>
                     <option value="Prescription">Prescription</option>
@@ -460,123 +466,114 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    File Name
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700">File Name</label>
                   <input
                     type="text"
                     name="fileName"
                     value={uploadFormData.fileName}
                     onChange={handleUploadInputChange}
-                    placeholder="e.g., Blood Test Results - January 2024"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter file name"
+                    className="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    File Upload
-                  </label>
-                  <div className="w-full h-32 border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center rounded-lg">
-                    <div className="text-center">
-                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                      <label className="cursor-pointer">
-                        <span className="text-blue-600 hover:text-blue-700 font-medium">
-                          Choose file
-                        </span>
-                        <span className="text-gray-500"> or drag and drop</span>
-                        <input
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                          className="hidden"
-                          required
-                        />
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1">
-                        PDF, JPG, PNG up to 10MB
-                      </p>
-                      {uploadFormData.file && (
-                        <p className="text-sm text-green-600 mt-2">
-                          Selected: {uploadFormData.file.name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700">Select File</label>
+                  <input
+                    type="file"
+                    onChange={handleFileChange}
+                    className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    required
+                  />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={filesLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                  disabled={filesLoading || !uploadFormData.file || !uploadFormData.fileName}
+                  className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded-md transition-colors duration-200 flex items-center justify-center"
                 >
-                  {filesLoading ? "Uploading..." : "Upload File"}
+                  {filesLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload File
+                    </>
+                  )}
                 </button>
               </form>
             </div>
           </div>
-        </div>
-        
-        {/* Bottom Section - File List */}
-        <div className="w-full">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Uploaded Files</h2>
+
+          {/* 🔄 REVERTED: Original Files List Section */}
+          <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Your Files</h2>
             
             {filesLoading ? (
               <div className="text-center py-8">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-500">Loading files...</p>
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading files...</p>
               </div>
             ) : files.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">No files uploaded yet</p>
-              </div>
+              <p className="text-gray-500 text-center py-8">No files uploaded yet</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {files.map((file) => (
-                  <div key={file.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="w-full h-32 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
-                      <FileText className="w-8 h-8 text-gray-400" />
-                    </div>
-                    
-                    <h3 className="font-medium text-gray-900 mb-1 truncate" title={file.fileName}>
-                      {file.fileName}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-1">Type: {file.fileType}</p>
-                    <p className="text-sm text-gray-600 mb-1">Size: {formatFileSize(file.fileSize)}</p>
-                    <p className="text-sm text-gray-600 mb-3">Date: {formatDate(file.uploadDate)}</p>
-                    
-                    <div className="flex flex-col space-y-2">
-                      {/* First row - View and Download */}
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => handleFileView(file.id)}
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>View</span>
-                        </button>
-                        <button 
-                          onClick={() => handleFileDownload(file.id, file.fileName)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
-                        >
-                          <Download className="w-3 h-3" />
-                          <span>Download</span>
-                        </button>
-                      </div>
-                      {/* Second row - Delete */}
-                      <button 
-                        onClick={() => handleFileDelete(file.id)}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        File Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {files.map((file) => (
+                      <tr key={file.id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {file.fileName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {file.fileType}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => viewFile(file.id)}
+                              className="text-blue-600 hover:text-blue-900 flex items-center"
+                            >
+                              <Eye className="w-4 h-4 mr-1" />
+                              View
+                            </button>
+                            <button
+                              onClick={() => downloadFile(file.id, file.fileName)}
+                              className="text-green-600 hover:text-green-900 flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Download
+                            </button>
+                            <button
+                              onClick={() => deleteFile(file.id)}
+                              className="text-red-600 hover:text-red-900 flex items-center"
+                            >
+                              <Trash2 className="w-4 h-4 mr-1" />
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
