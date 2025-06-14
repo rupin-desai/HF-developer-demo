@@ -477,5 +477,5 @@ docker-compose.override.yml
 *.snupkg
 
 # Entity Framework
-Migrations/
-!Migrations/.gitkeep
+# Migrations/
+# Migrations/.gitkeep
