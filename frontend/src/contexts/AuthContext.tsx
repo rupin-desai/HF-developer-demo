@@ -1,10 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-// 🔧 FIXED: Use explicit import path and named import
 import { AuthService } from '@/api/authService';
-// 🔧 ALTERNATIVE: Or use the index file
-// import { AuthService } from '@/api';
 import type { User } from '@/api/types';
 
 interface AuthContextType {
@@ -15,6 +12,7 @@ interface AuthContextType {
   signup: (userData: Omit<User, 'id' | 'profileImage'> & { password: string }) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (userData: Partial<User>, profilePicture?: File) => Promise<boolean>;
+  refreshUser: () => Promise<void>; // Add refresh function
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,7 +38,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAuthStatus = async () => {
     try {
+      setIsLoading(true);
       const userData = await AuthService.checkAuthStatus();
+      console.log("Auth check result:", userData);
       setUser(userData);
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -50,18 +50,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const userData = await AuthService.checkAuthStatus();
+      console.log("User refresh result:", userData);
+      setUser(userData);
+    } catch (error) {
+      console.error('User refresh failed:', error);
+    }
+  };
+
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      setIsLoading(true);
       const result = await AuthService.login({ email, password });
       
       if (result.success && result.user) {
+        console.log("Login successful, setting user:", result.user);
         setUser(result.user);
         
-        // Force React state update
-        setTimeout(() => {
-          console.log("Force user context update");
-          setUser(() => ({ ...result.user! }));
-        }, 250);
+        // Force immediate user data refresh
+        setTimeout(async () => {
+          console.log("Force refreshing user data after login");
+          await refreshUser();
+        }, 100);
         
         return true;
       }
@@ -70,6 +82,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (error) {
       console.error('Login failed:', error);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -117,6 +131,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     signup,
     logout,
     updateProfile,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
