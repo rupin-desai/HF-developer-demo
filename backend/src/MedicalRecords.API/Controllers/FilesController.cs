@@ -74,10 +74,33 @@ public class FilesController : ControllerBase
             return NotFound();
         }
 
-        // Set headers for inline viewing instead of download
-        Response.Headers.Add("Content-Disposition", $"inline; filename=\"{result.Value.fileName}\"");
+        // Extract the values and add null checks
+        var (fileStream, fileName, contentType) = result.Value;
 
-        return File(result.Value.fileStream, result.Value.contentType);
+        if (fileStream == null)
+        {
+            return NotFound("File content not available");
+        }
+
+        if (string.IsNullOrEmpty(contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        if (string.IsNullOrEmpty(fileName))
+        {
+            fileName = "unknown";
+        }
+
+        // Use indexer to set headers instead of Add() - this prevents duplicate key exceptions
+        Response.Headers["Content-Disposition"] = $"inline; filename=\"{fileName}\"";
+
+        // Also set cache control headers for better browser viewing
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
+        return File(fileStream, contentType);
     }
 
     [HttpGet("{id}/download")]
@@ -96,7 +119,30 @@ public class FilesController : ControllerBase
             return NotFound();
         }
 
-        return File(result.Value.fileStream, result.Value.contentType, result.Value.fileName);
+        // Extract the values and add null checks
+        var (fileStream, fileName, contentType) = result.Value;
+
+        if (fileStream == null)
+        {
+            return NotFound("File content not available");
+        }
+
+        if (string.IsNullOrEmpty(contentType))
+        {
+            contentType = "application/octet-stream";
+        }
+
+        if (string.IsNullOrEmpty(fileName))
+        {
+            fileName = "download";
+        }
+
+        // Set additional headers for download
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+
+        return File(fileStream, contentType, fileName);
     }
 
     [HttpDelete("{id}")]
