@@ -31,20 +31,23 @@ public class UserRepository : IUserRepository
         return user;
     }
 
-    public async Task UpdateAsync(User user)
+    public async Task<User> UpdateAsync(User user)
     {
         _context.Users.Update(user);
         await _context.SaveChangesAsync();
+        return user;
     }
 
-    public async Task DeleteAsync(string id)
+    public async Task<bool> DeleteAsync(string id)
     {
         var user = await GetByIdAsync(id);
         if (user != null)
         {
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
+            return true;
         }
+        return false;
     }
 
     public async Task<bool> ExistsAsync(string email)

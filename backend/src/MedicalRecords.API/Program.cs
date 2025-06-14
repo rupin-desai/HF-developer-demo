@@ -86,7 +86,7 @@ else if (!string.IsNullOrEmpty(connectionString))
             Console.WriteLine($"Using connection string: {connectionString}");
 
             using var testConnection = new NpgsqlConnection(connectionString);
-            
+
             await testConnection.OpenAsync();
 
             // Test a simple query

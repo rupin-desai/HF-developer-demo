@@ -35,7 +35,7 @@ public class StaticFilesController : ControllerBase
 
             // Get file stream
             var fileStream = await _fileStorageService.GetFileAsync(filePath);
-            
+
             // Determine content type based on file extension
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
             var contentType = extension switch
@@ -43,8 +43,16 @@ public class StaticFilesController : ControllerBase
                 ".pdf" => "application/pdf",
                 ".jpg" or ".jpeg" => "image/jpeg",
                 ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
                 _ => "application/octet-stream"
             };
+
+            // Set cache headers for images (especially profile pictures)
+            if (contentType.StartsWith("image/"))
+            {
+                Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour cache
+            }
 
             return File(fileStream, contentType);
         }
