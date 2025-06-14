@@ -8,20 +8,34 @@ import { useFiles } from "@/contexts/FileContext";
 
 type FileType = "LabReport" | "Prescription" | "XRay" | "BloodReport" | "MRIScan" | "CTScan";
 
+// 🔧 FIXED: Define proper gender type
+type Gender = "male" | "female";
+
+// 🔧 FIXED: Define profile form data interface
+interface ProfileFormData {
+  id: string;
+  fullName: string;
+  email: string;
+  gender: Gender;
+  phoneNumber: string;
+  profileImage: string;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, updateProfile, isAuthenticated, isLoading } = useAuth();
   const { files, uploadFile, deleteFile, downloadFile, viewFile, refreshFiles, isLoading: filesLoading } = useFiles();
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileFormData, setProfileFormData] = useState(user || {
+  const [profileFormData, setProfileFormData] = useState<ProfileFormData>({
     id: "",
     fullName: "",
     email: "",
-    gender: "male" as const,
+    gender: "male",
     phoneNumber: "",
     profileImage: ""
   });
+  
   const [uploadFormData, setUploadFormData] = useState({
     fileType: "LabReport" as FileType,
     fileName: "",
@@ -35,19 +49,51 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  // Update profile form when user changes
+  // 🔧 IMPROVED: Update profile form immediately when user data changes
   useEffect(() => {
     if (user) {
-      setProfileFormData(user);
+      console.log("User data changed, updating profile form:", user);
+      setProfileFormData({
+        id: user.id || "",
+        fullName: user.fullName || "",
+        email: user.email || "",
+        gender: (user.gender as Gender) || "male",
+        phoneNumber: user.phoneNumber || "",
+        profileImage: user.profileImage || ""
+      });
     }
   }, [user]);
 
-  // Load files when component mounts
+  // 🔧 IMPROVED: Listen for login events and force state update
   useEffect(() => {
-    if (isAuthenticated) {
+    const handleUserLoggedIn = () => {
+      console.log("Login event detected, forcing profile refresh");
+      // Force a slight delay to ensure user context is updated
+      setTimeout(() => {
+        if (user) {
+          setProfileFormData({
+            id: user.id || "",
+            fullName: user.fullName || "",
+            email: user.email || "",
+            gender: (user.gender as Gender) || "male",
+            phoneNumber: user.phoneNumber || "",
+            profileImage: user.profileImage || ""
+          });
+        }
+      }, 100);
+    };
+
+    window.addEventListener('userLoggedIn', handleUserLoggedIn);
+    return () => window.removeEventListener('userLoggedIn', handleUserLoggedIn);
+  }, [user]);
+
+  // Load files when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      console.log("User authenticated, loading files...");
       refreshFiles();
     }
-  }, [isAuthenticated, refreshFiles]);
+  }, [isAuthenticated, user, refreshFiles]);
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -75,9 +121,10 @@ export default function DashboardPage() {
 
   // Profile handlers
   const handleProfileInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
     setProfileFormData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [name]: name === 'gender' ? value as Gender : value // Type assertion for gender
     }));
   };
 
@@ -87,15 +134,18 @@ export default function DashboardPage() {
     console.log("Profile updated:", profileFormData);
   };
 
+  // 🔧 FIXED: Improve cancel handler with proper typing
   const handleProfileCancel = () => {
-    setProfileFormData(user || {
-      id: "",
-      fullName: "",
-      email: "",
-      gender: "male" as const,
-      phoneNumber: "",
-      profileImage: ""
-    });
+    if (user) {
+      setProfileFormData({
+        id: user.id || "",
+        fullName: user.fullName || "",
+        email: user.email || "",
+        gender: (user.gender as Gender) || "male",
+        phoneNumber: user.phoneNumber || "",
+        profileImage: user.profileImage || ""
+      });
+    }
     setIsEditingProfile(false);
   };
 

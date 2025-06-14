@@ -6,9 +6,10 @@ interface User {
   id: string;
   fullName: string;
   email: string;
-  gender: 'male' | 'female';
+  gender: "male" | "female"; // 🔧 FIXED: Allow both values
   phoneNumber: string;
   profileImage: string;
+  // Add any other user properties you have
 }
 
 interface AuthContextType {
@@ -80,7 +81,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (response.ok) {
         const userData = await response.json();
+        console.log("Login successful, setting user data:", userData);
+        
+        // 🔧 IMPROVED: Set user data and trigger multiple events
         setUser(userData);
+        
+        // Dispatch multiple events with different timings to ensure everything updates
+        setTimeout(() => {
+          console.log("Dispatching userLoggedIn event");
+          window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: userData }));
+        }, 50);
+        
+        setTimeout(() => {
+          console.log("Dispatching user state change event");
+          window.dispatchEvent(new CustomEvent('userStateChanged', { detail: userData }));
+        }, 100);
+        
         return true;
       } else {
         return false;

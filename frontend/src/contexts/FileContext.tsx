@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 
 interface MedicalFile {
   id: string;
@@ -39,15 +39,19 @@ export const useFiles = () => {
 };
 
 // Use environment variable if available, fallback to hardcoded URL
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://hf-developer-demo.onrender.com'
-  : 'http://localhost:8080'; // Note: Changed from 5000 to 8080
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || (
+  process.env.NODE_ENV === 'production' 
+    ? 'https://hf-developer-demo.onrender.com'
+    : 'http://localhost:8080'
+);
 
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [files, setFiles] = useState<MedicalFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 🔧 FIXED: Define refreshFiles first without dependencies
   const refreshFiles = useCallback(async () => {
+    console.log("Refreshing files...");
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/files`, {
@@ -57,6 +61,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
+          console.log("Files loaded successfully:", data.files.length);
           setFiles(data.files);
         } else {
           console.error('Failed to fetch files:', data.message);
@@ -72,7 +77,21 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // Empty dependency array - this function doesn't depend on anything
+
+  // 🔧 FIXED: Now we can safely use refreshFiles in useEffect
+  useEffect(() => {
+    const handleUserLogin = () => {
+      console.log("User logged in event received, refreshing files...");
+      refreshFiles();
+    };
+
+    window.addEventListener('userLoggedIn', handleUserLogin);
+    
+    return () => {
+      window.removeEventListener('userLoggedIn', handleUserLogin);
+    };
+  }, [refreshFiles]); // Now refreshFiles is properly defined
 
   const uploadFile = useCallback(async (fileData: FileUploadData): Promise<boolean> => {
     try {
