@@ -58,6 +58,28 @@ public class FilesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("{id}/view")]
+    public async Task<IActionResult> ViewFile(string id)
+    {
+        var userId = HttpContext.Items["UserId"] as string;
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await _fileService.DownloadFileAsync(id, userId);
+
+        if (result == null)
+        {
+            return NotFound();
+        }
+
+        // Set headers for inline viewing instead of download
+        Response.Headers.Add("Content-Disposition", $"inline; filename=\"{result.Value.fileName}\"");
+
+        return File(result.Value.fileStream, result.Value.contentType);
+    }
+
     [HttpGet("{id}/download")]
     public async Task<IActionResult> DownloadFile(string id)
     {

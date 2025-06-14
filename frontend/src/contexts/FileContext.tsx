@@ -24,6 +24,7 @@ interface FileContextType {
   uploadFile: (fileData: FileUploadData) => Promise<boolean>;
   deleteFile: (fileId: string) => Promise<boolean>;
   downloadFile: (fileId: string, fileName: string) => Promise<void>;
+  viewFile: (fileId: string) => void;
   refreshFiles: () => Promise<void>;
 }
 
@@ -155,12 +156,19 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const viewFile = useCallback((fileId: string): void => {
+    // Open file in new tab for viewing
+    const viewUrl = `${API_BASE_URL}/api/files/${fileId}/view`;
+    window.open(viewUrl, '_blank');
+  }, []);
+
   const value = {
     files,
     isLoading,
     uploadFile,
     deleteFile,
     downloadFile,
+    viewFile,
     refreshFiles
   };
 

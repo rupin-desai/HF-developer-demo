@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Save, User, Upload, FileText, Eye, Trash2, LogOut, Settings } from "lucide-react";
+import { Camera, Save, User, Upload, FileText, Eye, Download, Trash2, LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFiles } from "@/contexts/FileContext";
 
@@ -11,7 +11,7 @@ type FileType = "LabReport" | "Prescription" | "XRay" | "BloodReport" | "MRIScan
 export default function DashboardPage() {
   const router = useRouter();
   const { user, logout, updateProfile, isAuthenticated, isLoading } = useAuth();
-  const { files, uploadFile, deleteFile, downloadFile, refreshFiles, isLoading: filesLoading } = useFiles();
+  const { files, uploadFile, deleteFile, downloadFile, viewFile, refreshFiles, isLoading: filesLoading } = useFiles();
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileFormData, setProfileFormData] = useState(user || {
@@ -155,6 +155,10 @@ export default function DashboardPage() {
 
   const handleFileDownload = async (fileId: string, fileName: string) => {
     await downloadFile(fileId, fileName);
+  };
+
+  const handleFileView = (fileId: string) => {
+    viewFile(fileId);
   };
 
   const handleLogout = () => {
@@ -456,17 +460,28 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-600 mb-1">Size: {formatFileSize(file.fileSize)}</p>
                     <p className="text-sm text-gray-600 mb-3">Date: {formatDate(file.uploadDate)}</p>
                     
-                    <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleFileDownload(file.id, file.fileName)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
-                      >
-                        <Eye className="w-3 h-3" />
-                        <span>Download</span>
-                      </button>
+                    <div className="flex flex-col space-y-2">
+                      {/* First row - View and Download */}
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => handleFileView(file.id)}
+                          className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>View</span>
+                        </button>
+                        <button 
+                          onClick={() => handleFileDownload(file.id, file.fileName)}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Download</span>
+                        </button>
+                      </div>
+                      {/* Second row - Delete */}
                       <button 
                         onClick={() => handleFileDelete(file.id)}
-                        className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
+                        className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-1 px-2 rounded transition-colors duration-200 flex items-center justify-center space-x-1"
                       >
                         <Trash2 className="w-3 h-3" />
                         <span>Delete</span>
