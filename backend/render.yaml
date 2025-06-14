@@ -1,0 +1,26 @@
+# render.yaml
+services:
+  - type: web
+    name: medical-records-api
+    env: dotnet
+    region: oregon
+    plan: free
+    buildCommand: |
+      cd backend/src
+      dotnet restore
+      dotnet publish MedicalRecords.API/MedicalRecords.API.csproj -c Release -o ../publish --no-restore
+    startCommand: cd backend/publish && dotnet MedicalRecords.API.dll
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ASPNETCORE_FORWARDEDHEADERS_ENABLED
+        value: true
+    healthCheckPath: /health
+
+databases:
+  - name: medical-records-db
+    databaseName: medicalrecords
+    user: medicaluser
+    plan: free
