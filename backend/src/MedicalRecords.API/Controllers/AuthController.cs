@@ -33,14 +33,23 @@ public class AuthController : ControllerBase
             return BadRequest(result);
         }
 
-        // Set session cookie
+        // 🔧 UPDATED: Set session cookie with production-ready settings
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = DateTimeOffset.UtcNow.AddDays(7)
+            Secure = true, // Always use HTTPS in production
+            SameSite = SameSiteMode.None, // Required for cross-domain
+            Expires = DateTimeOffset.UtcNow.AddDays(1), // 1 day expiration
+            Path = "/",
+            Domain = null // Let browser handle domain
         };
+
+        // Set for development vs production
+        if (HttpContext.Request.Host.Host == "localhost")
+        {
+            cookieOptions.Secure = false; // Allow HTTP for localhost
+            cookieOptions.SameSite = SameSiteMode.Lax;
+        }
 
         Response.Cookies.Append("session_token", result.SessionToken!, cookieOptions);
 

@@ -12,7 +12,7 @@ interface AuthContextType {
   signup: (userData: Omit<User, 'id' | 'profileImage'> & { password: string }) => Promise<boolean>;
   logout: () => Promise<void>;
   updateProfile: (userData: Partial<User>, profilePicture?: File) => Promise<boolean>;
-  refreshUser: () => Promise<void>; // Add refresh function
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,25 +28,67 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const isAuthenticated = user !== null;
 
   // Check authentication status on app load
   useEffect(() => {
-    checkAuthStatus();
+    if (!isInitialized) {
+      checkAuthStatus();
+    }
+  }, [isInitialized]);
+
+  // Listen for storage changes (for multi-tab support)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'medical_user_data') {
+        if (e.newValue) {
+          try {
+            const userData = JSON.parse(e.newValue);
+            setUser(userData);
+          } catch (error) {
+            console.error('Error parsing user data from storage:', error);
+          }
+        } else {
+          // User data was cleared in another tab
+          setUser(null);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
+
+  // Listen for online/offline events
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log("Network restored, refreshing user data...");
+      if (user) {
+        refreshUser();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [user]);
 
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
+      console.log("Checking auth status...");
+      
       const userData = await AuthService.checkAuthStatus();
       console.log("Auth check result:", userData);
+      
       setUser(userData);
     } catch (error) {
       console.error('Auth check failed:', error);
       setUser(null);
     } finally {
       setIsLoading(false);
+      setIsInitialized(true);
     }
   };
 
@@ -69,11 +111,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log("Login successful, setting user:", result.user);
         setUser(result.user);
         
-        // Force immediate user data refresh
+        // Force immediate user data refresh after a short delay
         setTimeout(async () => {
           console.log("Force refreshing user data after login");
           await refreshUser();
-        }, 100);
+        }, 200);
         
         return true;
       }
@@ -98,11 +140,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
+      setIsLoading(true);
       await AuthService.logout();
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
       setUser(null);
+      setIsLoading(false);
     }
   };
 

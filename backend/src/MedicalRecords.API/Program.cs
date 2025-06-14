@@ -145,20 +145,49 @@ else
     Console.WriteLine("Using fallback SQLite database");
 }
 
-// Add CORS for your Vercel frontend
+// 🔧 REPLACE: Update your existing CORS configuration (around line 135-155)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy.WithOrigins(
-            "https://hf-developer-demo.vercel.app", // Your Vercel URL
+            "https://hf-developer-demo.vercel.app",
             "https://*.vercel.app",
-            "http://localhost:3000" // For local development
+            "http://localhost:3000"
         )
-        .AllowCredentials()
+        .AllowCredentials() // Essential for cookies
         .AllowAnyHeader()
         .AllowAnyMethod();
+
+        // Handle wildcard subdomains for Vercel
+        policy.SetIsOriginAllowed(origin =>
+        {
+            return origin.Contains("vercel.app") ||
+                   origin == "http://localhost:3000" ||
+                   origin == "https://hf-developer-demo.vercel.app";
+        });
     });
+});
+
+// 🔧 ADD: Configure session cookies for production (NEW - add after CORS)
+builder.Services.Configure<CookiePolicyOptions>(options =>
+{
+    options.CheckConsentNeeded = context => false; // Disable consent check
+    options.MinimumSameSitePolicy = SameSiteMode.None;
+    options.Secure = CookieSecurePolicy.Always;
+});
+
+// 🔧 ADD: Configure application cookies for session management (NEW)
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.Name = "session_token";
+    options.Cookie.SameSite = SameSiteMode.None; // Required for cross-domain
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // HTTPS only in production
+    options.Cookie.HttpOnly = true; // Security
+    options.ExpireTimeSpan = TimeSpan.FromDays(1); // 1 day expiration
+    options.SlidingExpiration = true; // Extend on activity
+    options.LoginPath = "/api/auth/login";
+    options.LogoutPath = "/api/auth/logout";
 });
 
 // Register Infrastructure Services
@@ -195,7 +224,8 @@ app.MapGet("/health", () => Results.Ok(new
     port = Environment.GetEnvironmentVariable("PORT")
 }));
 
-// Configure for production
+// 🔧 UPDATE: Configure for production - add cookie policy
+app.UseCookiePolicy();
 app.UseCors("AllowFrontend");
 
 // Add session authentication middleware

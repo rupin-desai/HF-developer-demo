@@ -262,7 +262,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-100">
       <DashboardHeader 
-        userName={user.fullName} 
+        userName={user?.fullName || undefined} 
         onLogout={() => logout()} 
       />
 

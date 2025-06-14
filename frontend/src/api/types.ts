@@ -47,8 +47,10 @@ export interface ApiResponse<T = unknown> {  // Change 'any' to 'unknown'
   data?: T;
 }
 
-export interface AuthResponse extends ApiResponse {
-  user?: User;
+export interface AuthResponse {
+  success: boolean;
+  user?: User | null; // Allow null in addition to undefined
+  message?: string;
 }
 
 export interface FilesResponse extends ApiResponse {
