@@ -37,13 +37,14 @@ const SessionStorage = {
       
       if (!userData || !lastLogin) return null;
       
-      // Check if session is older than 24 hours
+      // 🔧 FIX: More lenient session expiration
       const loginTime = new Date(lastLogin);
       const now = new Date();
       const hoursElapsed = (now.getTime() - loginTime.getTime()) / (1000 * 60 * 60);
       
-      if (hoursElapsed > 24) {
-        console.log('Session expired, clearing storage');
+      // 🔧 FIX: Only clear if older than 7 days (match backend)
+      if (hoursElapsed > (7 * 24)) {
+        console.log('Session very old, clearing storage');
         SessionStorage.clearSession();
         return null;
       }
@@ -53,7 +54,7 @@ const SessionStorage = {
       return parsedUser;
     } catch (error) {
       console.error('Error reading user from storage:', error);
-      SessionStorage.clearSession(); // Clear corrupted data
+      // 🔧 FIX: Don't clear on parse errors, just return null
       return null;
     }
   },
@@ -108,6 +109,57 @@ interface SignupData {
   gender: string;
   phoneNumber: string;
 }
+
+// 🔧 FIX: Add all required User properties to ProfileUpdateResponse
+interface ProfileUpdateResponse {
+  success?: boolean;
+  message?: string;
+  user?: User;
+  data?: User;
+  // Direct user properties - include all User fields to allow safe conversion
+  id?: string;
+  fullName?: string;
+  email?: string;
+  gender?: string;
+  phoneNumber?: string;
+  profileImage?: string | null;
+  [key: string]: unknown; // Allow other properties
+}
+
+// 🔧 FIX: Helper function to safely extract User from ProfileUpdateResponse with proper type validation
+const extractUserFromProfileResponse = (data: ProfileUpdateResponse): User | undefined => {
+  // Try different response structures
+  if (data.user && data.user.id) {
+    // Structure: { success: true, user: {...} }
+    return data.user;
+  } else if (data.data && data.data.id) {
+    // Structure: { success: true, data: {...} }
+    return data.data;
+  } else if (data.id && data.fullName && data.email) {
+    // Structure: direct user object - construct User with proper type validation
+    
+    // 🔧 FIX: Validate and convert gender to proper type
+    const validateGender = (gender: string | undefined): "male" | "female" => {
+      if (gender?.toLowerCase() === 'male') return 'male';
+      if (gender?.toLowerCase() === 'female') return 'female';
+      return 'male'; // Default fallback
+    };
+    
+    // 🔧 FIX: Handle profileImage properly
+    const profileImage: string = data.profileImage || '';
+    
+    return {
+      id: data.id,
+      fullName: data.fullName,
+      email: data.email,
+      gender: validateGender(data.gender),
+      phoneNumber: data.phoneNumber || '',
+      profileImage: profileImage
+    };
+  }
+  
+  return undefined;
+};
 
 // 🔧 Helper function to safely parse JSON responses
 const safeJsonParse = async <T = Record<string, unknown>>(response: Response): Promise<T> => {
@@ -180,71 +232,44 @@ export class AuthService {
     console.log('Checking authentication status...');
     
     try {
-      // First try localStorage
-      const cachedUser = SessionStorage.getUser();
-      console.log('Cached user from localStorage:', cachedUser);
+      // 🔧 FIX: Always try server first, then fallback to cache
+      const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
+        credentials: 'include',
+      });
       
-      // If we have cached user, return it immediately and verify in background
+      console.log(`Auth check response status: ${response.status}`);
+      
+      if (response.ok) {
+        const userData = await safeJsonParse<User>(response);
+        
+        if (userData && userData.id) {
+          console.log("Server auth check successful:", userData);
+          SessionStorage.setUser(userData); // Update cache
+          return userData;
+        }
+      }
+      
+      // 🔧 FIX: If server fails, try cached user
+      const cachedUser = SessionStorage.getUser();
       if (cachedUser) {
-        console.log('Using cached user data:', cachedUser);
-        
-        // Try to verify with server in background (don't wait for it)
-        setTimeout(async () => {
-          try {
-            // 🔧 FIX: Use cookies only - backend expects session_token cookie
-            const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
-              credentials: 'include', // This sends the session_token cookie
-            });
-            
-            if (response.ok) {
-              const userData = await safeJsonParse<User>(response);
-              if (userData && userData.id) {
-                console.log("Background auth verification successful");
-                SessionStorage.setUser(userData);
-              }
-            }
-          } catch (error) {
-            console.log('Background auth verification failed (not critical):', error);
-          }
-        }, 100);
-        
+        console.log("Server check failed, using cached user:", cachedUser);
         return cachedUser;
       }
       
-      // No cached user, try server verification
-      try {
-        // 🔧 FIX: Use cookies only - backend expects session_token cookie
-        const response = await apiRequest(API_ENDPOINTS.AUTH.CURRENT_USER, {
-          credentials: 'include', // This sends the session_token cookie
-        });
-        
-        console.log(`Auth check response status: ${response.status}`);
-        
-        if (response.ok) {
-          const userData = await safeJsonParse<User>(response);
-          
-          if (userData && userData.id) {
-            console.log("Server auth check successful:", userData);
-            SessionStorage.setUser(userData);
-            return userData;
-          }
-        } else if (response.status === 401) {
-          console.log('Unauthorized - clearing cached session');
-          SessionStorage.clearSession();
-        }
-      } catch (error) {
-        console.log('Server auth check failed:', error);
+      // 🔧 FIX: Clear cache only if server returns 401
+      if (response.status === 401) {
+        console.log('Unauthorized - clearing cached session');
+        SessionStorage.clearSession();
       }
       
-      console.log('No valid user found');
       return null;
     } catch (error) {
       console.error('Auth status check failed:', error);
       
-      // Final fallback to cached user
+      // 🔧 FIX: Always try cached user on network errors
       const cachedUser = SessionStorage.getUser();
       if (cachedUser) {
-        console.log("Error occurred, using cached user:", cachedUser);
+        console.log("Network error, using cached user:", cachedUser);
         return cachedUser;
       }
       
@@ -434,38 +459,25 @@ export class AuthService {
         };
       }
 
-      // Safely parse JSON response
-      const data = await safeJsonParse<any>(response);
+      const data = await safeJsonParse<ProfileUpdateResponse>(response);
       console.log('Profile update response data:', data);
 
       // 🔧 FIX: Check different possible response structures
-      // Your backend might return { success: true, user: {...} } or just the user directly
       if (data.success !== false) { // Allow undefined or true
-        let userData: User | undefined;
+        // 🔧 FIX: Use helper function to safely extract user data
+        const updatedUser = extractUserFromProfileResponse(data);
         
-        // Try different response structures
-        if (data.user && data.user.id) {
-          // Structure: { success: true, user: {...} }
-          userData = data.user;
-        } else if (data.data && data.data.id) {
-          // Structure: { success: true, data: {...} }
-          userData = data.data;
-        } else if (data.id) {
-          // Structure: direct user object
-          userData = data;
-        }
-        
-        if (userData && userData.id) {
-          console.log('Profile update successful:', userData);
+        if (updatedUser && updatedUser.id) {
+          console.log('Profile update successful:', updatedUser);
           
           // Update stored user data
-          SessionStorage.setUser(userData);
+          SessionStorage.setUser(updatedUser);
           
           // Dispatch profile updated event
           setTimeout(() => {
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-                detail: userData 
+                detail: updatedUser 
               }));
               console.log('userProfileUpdated event dispatched');
             }
@@ -473,7 +485,7 @@ export class AuthService {
           
           return {
             success: true,
-            user: userData,
+            user: updatedUser,
             message: data.message || 'Profile updated successfully'
           };
         } else {
