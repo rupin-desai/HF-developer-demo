@@ -1,120 +1,165 @@
-import { apiRequest, API_ENDPOINTS, API_BASE_URL } from './apiConfig';
-import type { 
-  MedicalFile, 
-  FileUploadRequest,
-  FilesResponse,
-  FileUploadResponse,
-  ApiResponse 
-} from './types';
+"use client";
+
+import { apiRequest, API_ENDPOINTS } from './apiConfig';
+import type { MedicalFile, FileUploadRequest } from './types';
+
+export interface FileResponse {
+  success: boolean;
+  files: MedicalFile[];
+  message?: string;
+}
+
+export interface UploadResponse {
+  success: boolean;
+  file?: MedicalFile;
+  message?: string;
+}
 
 export class FileService {
-  /**
-   * Get all files for the current user
-   */
-  static async getFiles(): Promise<{ success: boolean; files: MedicalFile[] }> {
+  // Allowed file extensions
+  static getAllowedExtensions(): string[] {
+    return ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'];
+  }
+
+  // File validation
+  static validateFile(file: File): { valid: boolean; error?: string } {
+    const allowedExtensions = FileService.getAllowedExtensions();
+    const maxFileSize = 10; // MB
+    
+    // Check file extension
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!hasValidExtension) {
+      return {
+        valid: false,
+        error: `Invalid file type. Allowed types: ${allowedExtensions.join(', ')}`
+      };
+    }
+    
+    // Check file size
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > maxFileSize) {
+      return {
+        valid: false,
+        error: `File size too large. Maximum size: ${maxFileSize}MB`
+      };
+    }
+    
+    return { valid: true };
+  }
+
+  // Get all files
+  static async getFiles(): Promise<FileResponse> {
     try {
-      console.log("Fetching files from API...");
-      
-      const response = await apiRequest(API_ENDPOINTS.FILES.LIST);
+      const response = await apiRequest(API_ENDPOINTS.FILES.LIST, {
+        credentials: 'include',
+      });
 
       if (response.ok) {
-        const data: FilesResponse = await response.json();
-        
-        if (data.success && data.files) {
-          console.log("Files loaded successfully:", data.files.length);
-          return { 
-            success: true, 
-            files: data.files 
-          };
-        } else {
-          console.error('Failed to fetch files:', data.message);
-          return { success: false, files: [] };
-        }
+        const data = await response.json();
+        return {
+          success: true,
+          files: data.files || [],
+          message: data.message
+        };
       } else {
-        console.error('Failed to fetch files:', response.statusText);
-        return { success: false, files: [] };
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          files: [],
+          message: errorData.message || 'Failed to fetch files'
+        };
       }
     } catch (error) {
       console.error('Error fetching files:', error);
-      return { success: false, files: [] };
+      return {
+        success: false,
+        files: [],
+        message: 'Network error while fetching files'
+      };
     }
   }
 
-  /**
-   * Upload a new file
-   */
-  static async uploadFile(fileData: FileUploadRequest): Promise<{ success: boolean; file?: MedicalFile; message?: string }> {
+  // Upload a file
+  static async uploadFile(fileData: FileUploadRequest): Promise<UploadResponse> {
     try {
       const formData = new FormData();
-      formData.append('fileName', fileData.fileName);
-      formData.append('fileType', fileData.fileType);
       formData.append('file', fileData.file);
+      formData.append('fileType', fileData.fileType);
+      formData.append('fileName', fileData.fileName);
 
       const response = await apiRequest(API_ENDPOINTS.FILES.UPLOAD, {
         method: 'POST',
-        body: formData
+        credentials: 'include',
+        body: formData,
       });
 
-      const data: FileUploadResponse = await response.json();
-
-      if (response.ok && data.success) {
-        console.log("File uploaded successfully:", data.file);
-        return { 
-          success: true, 
-          file: data.file 
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          file: data.file,
+          message: data.message || 'File uploaded successfully'
         };
       } else {
-        console.error('Upload failed:', data.message);
-        return { 
-          success: false, 
-          message: data.message || 'Upload failed' 
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          message: errorData.message || 'Failed to upload file'
         };
       }
     } catch (error) {
-      console.error('Upload error:', error);
-      return { 
-        success: false, 
-        message: 'An error occurred during upload' 
+      console.error('Error uploading file:', error);
+      return {
+        success: false,
+        message: 'Network error while uploading file'
       };
     }
   }
 
-  /**
-   * Delete a file
-   */
+  // 🔧 FIX: Delete a file
   static async deleteFile(fileId: string): Promise<{ success: boolean; message?: string }> {
     try {
-      const response = await apiRequest(API_ENDPOINTS.FILES.DELETE(fileId), {
-        method: 'DELETE'
+      // Construct the delete endpoint URL
+      const deleteEndpoint = `${API_ENDPOINTS.FILES.DELETE}/${fileId}`;
+      
+      const response = await apiRequest(deleteEndpoint, {
+        method: 'DELETE',
+        credentials: 'include',
       });
 
-      const data: ApiResponse = await response.json();
-
-      if (response.ok && data.success) {
-        console.log("File deleted successfully");
-        return { success: true };
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}));
+        return {
+          success: true,
+          message: data.message || 'File deleted successfully'
+        };
       } else {
-        console.error('Delete failed:', data.message);
-        return { 
-          success: false, 
-          message: data.message || 'Delete failed' 
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          message: errorData.message || 'Failed to delete file'
         };
       }
     } catch (error) {
-      console.error('Delete error:', error);
-      return { 
-        success: false, 
-        message: 'An error occurred during deletion' 
+      console.error('Error deleting file:', error);
+      return {
+        success: false,
+        message: 'Network error while deleting file'
       };
     }
   }
 
-  /**
-   * Download a file
-   */
+  // 🔧 FIX: Download a file
   static async downloadFile(fileId: string, fileName: string): Promise<void> {
     try {
-      const response = await apiRequest(API_ENDPOINTS.FILES.DOWNLOAD(fileId));
+      // Construct the download endpoint URL
+      const downloadEndpoint = `${API_ENDPOINTS.FILES.DOWNLOAD}/${fileId}/download`;
+      
+      const response = await apiRequest(downloadEndpoint, {
+        credentials: 'include',
+      });
 
       if (response.ok) {
         const blob = await response.blob();
@@ -124,117 +169,23 @@ export class FileService {
         link.download = fileName;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        link.remove();
         window.URL.revokeObjectURL(url);
-        console.log("File downloaded successfully:", fileName);
       } else {
-        console.error('Download failed:', response.statusText);
         throw new Error('Download failed');
       }
     } catch (error) {
-      console.error('Download error:', error);
+      console.error('Error downloading file:', error);
       throw error;
     }
   }
 
-  /**
-   * View a file in a new tab
-   */
+  // 🔧 FIX: View/open a file
   static viewFile(fileId: string): void {
-    const viewUrl = `${API_BASE_URL}${API_ENDPOINTS.FILES.VIEW(fileId)}`;
-    window.open(viewUrl, '_blank');
-    console.log("Opening file for viewing:", fileId);
-  }
-
-  /**
-   * Get file URL for direct access
-   */
-  static getFileUrl(fileId: string): string {
-    return `${API_BASE_URL}${API_ENDPOINTS.FILES.VIEW(fileId)}`;
-  }
-
-  /**
-   * 🔧 FIXED: Validate file to match backend exactly
-   */
-  static validateFile(file: File): { valid: boolean; error?: string } {
-    // Check file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
-    if (file.size > maxSize) {
-      return { 
-        valid: false, 
-        error: 'File size must be less than 10MB' 
-      };
-    }
-
-    // 🔧 CRITICAL: Match backend validation exactly
-    const fileName = file.name.toLowerCase();
-    const fileExtension = fileName.substring(fileName.lastIndexOf('.'));
-    const contentType = file.type.toLowerCase();
+    // Construct the view endpoint URL
+    const viewEndpoint = `${API_ENDPOINTS.FILES.VIEW}/${fileId}/view`;
     
-    // Backend allowed extensions (must match exactly)
-    const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'];
-    
-    // Backend allowed MIME types (must match exactly)
-    const allowedMimeTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/pjpeg',   // Progressive JPEG
-      'image/png',
-      'image/x-png',   // Alternative PNG
-      'image/gif',
-      'image/webp',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'application/rtf',
-      'text/rtf',
-      'application/octet-stream' // Fallback
-    ];
-
-    // Check file extension first
-    if (!allowedExtensions.includes(fileExtension)) {
-      return { 
-        valid: false, 
-        error: `File extension not allowed. Allowed extensions: ${allowedExtensions.join(', ')}` 
-      };
-    }
-
-    // Check MIME type
-    if (contentType && !allowedMimeTypes.includes(contentType)) {
-      console.warn(`MIME type "${contentType}" not in allowed list, but extension is valid. Allowing upload.`);
-      // Don't block upload if extension is valid but MIME type is unusual
-    }
-
-    return { valid: true };
-  }
-
-  /**
-   * Get allowed file extensions
-   */
-  static getAllowedExtensions(): string[] {
-    return ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.doc', '.docx'];
-  }
-
-  /**
-   * Get allowed MIME types
-   */
-  static getAllowedMimeTypes(): string[] {
-    return [
-      'application/pdf',
-      'image/jpeg',
-      'image/jpg',
-      'image/pjpeg',
-      'image/png',
-      'image/x-png',
-      'image/gif',
-      'image/webp',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'text/plain',
-      'application/rtf',
-      'text/rtf',
-      'application/octet-stream'
-    ];
+    // Open in new tab
+    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080'}${viewEndpoint}`, '_blank');
   }
 }

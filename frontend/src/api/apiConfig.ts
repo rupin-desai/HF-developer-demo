@@ -8,19 +8,19 @@ export const API_ENDPOINTS = {
     LOGIN: '/api/auth/login',
     SIGNUP: '/api/auth/signup',
     LOGOUT: '/api/auth/logout',
-    CURRENT_USER: '/api/auth/me', // 🔧 Try this instead, or check your backend routes
+    CURRENT_USER: '/api/auth/me',
   },
   // Profile endpoints
   PROFILE: {
     UPDATE: '/api/profile/update',
   },
-  // File endpoints
+  // File endpoints - these are strings, not functions
   FILES: {
     UPLOAD: '/api/files/upload',
     LIST: '/api/files',
-    DOWNLOAD: '/api/files',
-    DELETE: '/api/files',
-    VIEW: '/api/files',
+    DOWNLOAD: '/api/files', // Base path, will append /{fileId}/download
+    DELETE: '/api/files',   // Base path, will append /{fileId}
+    VIEW: '/api/files',     // Base path, will append /{fileId}/view
   },
   // Static files
   STATIC: {
@@ -44,7 +44,7 @@ export const apiRequest = async (
   const url = `${API_BASE_URL}${endpoint}`;
 
   const defaultOptions: RequestInit = {
-    credentials: 'include', // Always include cookies
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
