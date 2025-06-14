@@ -213,16 +213,67 @@ if (app.Environment.IsDevelopment())
 }
 
 // Health check endpoint for Render
-app.MapGet("/health", () => Results.Ok(new
+app.MapGet("/health", (ILogger<Program> logger, IServiceProvider services) =>
 {
-    status = "healthy",
-    timestamp = DateTime.UtcNow,
-    environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
-    version = "1.0.0",
-    database = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL")) ? "PostgreSQL" : "SQLite",
-    hasDbUrl = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL")),
-    port = Environment.GetEnvironmentVariable("PORT")
-}));
+    try
+    {
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var storagePath = Environment.GetEnvironmentVariable("FileStorage__BasePath") ?? "/app/uploads";
+
+        // Test storage
+        var storageHealthy = true;
+        var storageMessage = "OK";
+
+        try
+        {
+            if (Directory.Exists(storagePath))
+            {
+                // Test write permissions
+                var testFile = Path.Combine(storagePath, $"health_check_{DateTime.UtcNow.Ticks}.tmp");
+                File.WriteAllText(testFile, "health check");
+                File.Delete(testFile);
+                storageMessage = $"Writable at {storagePath}";
+
+                // Check if it's persistent disk
+                var diskInfo = new DirectoryInfo(storagePath);
+                var freeSpace = diskInfo.Parent?.GetDirectories().Length ?? 0;
+                storageMessage += $" (entries: {freeSpace})";
+            }
+            else
+            {
+                storageHealthy = false;
+                storageMessage = $"Directory not found: {storagePath}";
+            }
+        }
+        catch (Exception ex)
+        {
+            storageHealthy = false;
+            storageMessage = ex.Message;
+        }
+
+        return Results.Ok(new
+        {
+            status = "healthy",
+            timestamp = DateTime.UtcNow,
+            environment = environment,
+            version = "1.0.0",
+            database = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DATABASE_URL")) ? "PostgreSQL" : "SQLite",
+            storage = new
+            {
+                healthy = storageHealthy,
+                message = storageMessage,
+                basePath = storagePath,
+                maxFileSize = Environment.GetEnvironmentVariable("FileStorage__MaxFileSize") ?? "10485760"
+            },
+            port = Environment.GetEnvironmentVariable("PORT")
+        });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Health check failed");
+        return Results.Problem("Health check failed");
+    }
+});
 
 // 🔧 UPDATE: Configure for production - add cookie policy
 app.UseCookiePolicy();
