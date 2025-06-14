@@ -5,7 +5,6 @@ import type {
   User, 
   LoginRequest, 
   AuthResponse,
-  ApiResponse 
 } from './types';
 
 // 🔧 Session storage keys
