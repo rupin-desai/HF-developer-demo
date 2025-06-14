@@ -41,13 +41,30 @@ public class FileService
                 };
             }
 
-            // Check file type
-            if (!_fileStorageService.IsAllowedFileType(request.File.FileName))
+            // 🔧 CRITICAL FIX: Check both content type AND file extension
+            var fileName = request.File.FileName;
+            var contentType = request.File.ContentType;
+
+            // Validate content type
+            if (!_fileStorageService.IsAllowedFileType(contentType))
             {
                 return new FileResponse
                 {
                     Success = false,
                     Message = "File type not allowed. Allowed types: " + string.Join(", ", _fileStorageService.GetAllowedExtensions())
+                };
+            }
+
+            // 🔧 NEW: Also validate file extension for extra security
+            var fileExtension = Path.GetExtension(fileName).ToLower();
+            var allowedExtensions = _fileStorageService.GetAllowedExtensions();
+
+            if (!allowedExtensions.Contains(fileExtension))
+            {
+                return new FileResponse
+                {
+                    Success = false,
+                    Message = "File extension not allowed. Allowed extensions: " + string.Join(", ", allowedExtensions)
                 };
             }
 
@@ -63,7 +80,7 @@ public class FileService
 
             // Save file to storage
             using var stream = request.File.OpenReadStream();
-            var filePath = await _fileStorageService.SaveFileAsync(stream, request.File.FileName, request.File.ContentType);
+            var filePath = await _fileStorageService.SaveFileAsync(stream, fileName, contentType);
 
             // Create database record
             var medicalFile = new MedicalFile
@@ -72,7 +89,7 @@ public class FileService
                 FileType = fileType,
                 FilePath = filePath,
                 FileSize = request.File.Length,
-                ContentType = request.File.ContentType,
+                ContentType = contentType,
                 UserId = userId
             };
 

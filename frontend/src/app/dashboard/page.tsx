@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useFiles } from "@/contexts/FileContext";
+// 🔧 CENTRALIZED: Import FileService only in main page
+import { FileService } from "@/api/fileService";
 
 // Import Dashboard components
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
@@ -49,6 +51,10 @@ export default function DashboardPage() {
   const [selectedProfilePicture, setSelectedProfilePicture] = useState<File | null>(null);
   const [profilePicturePreview, setProfilePicturePreview] = useState<string>("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+
+  // 🔧 NEW: File validation configuration from service
+  const allowedExtensions = FileService.getAllowedExtensions();
+  const maxFileSize = 10; // MB
 
   // Function to update profile form data
   const updateProfileFormData = useCallback((userData: any) => {
@@ -210,9 +216,21 @@ export default function DashboardPage() {
     }
   };
 
+  // 🔧 NEW: File validation function to pass to component
+  const handleFileValidation = (file: File): { valid: boolean; error?: string } => {
+    return FileService.validateFile(file);
+  };
+
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (uploadFormData.file && uploadFormData.fileName) {
+      // 🔧 CENTRALIZED: Final validation before upload
+      const validation = FileService.validateFile(uploadFormData.file);
+      if (!validation.valid) {
+        alert(validation.error);
+        return;
+      }
+
       const success = await uploadFile({
         fileName: uploadFormData.fileName,
         fileType: uploadFormData.fileType,
@@ -262,6 +280,9 @@ export default function DashboardPage() {
               onInputChange={handleUploadInputChange}
               onFileChange={handleFileChange}
               onSubmit={handleFileUpload}
+              allowedExtensions={allowedExtensions}
+              maxFileSize={maxFileSize}
+              onFileValidation={handleFileValidation}
             />
           </div>
 

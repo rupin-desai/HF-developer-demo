@@ -1,27 +1,14 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-
-interface MedicalFile {
-  id: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-  uploadDate: string;
-  contentType: string;
-  fileUrl: string;
-}
-
-interface FileUploadData {
-  fileName: string;
-  fileType: string;
-  file: File;
-}
+// 🔧 FIXED: Use proper import path
+import { FileService } from '@/api/fileService';
+import type { MedicalFile, FileUploadRequest } from '@/api/types';
 
 interface FileContextType {
   files: MedicalFile[];
   isLoading: boolean;
-  uploadFile: (fileData: FileUploadData) => Promise<boolean>;
+  uploadFile: (fileData: FileUploadRequest) => Promise<boolean>;
   deleteFile: (fileId: string) => Promise<boolean>;
   downloadFile: (fileId: string, fileName: string) => Promise<void>;
   viewFile: (fileId: string) => void;
@@ -38,48 +25,27 @@ export const useFiles = () => {
   return context;
 };
 
-// Use environment variable if available, fallback to hardcoded URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.API_BASE_URL || (
-  process.env.NODE_ENV === 'production' 
-    ? 'https://hf-developer-demo.onrender.com'
-    : 'http://localhost:8080'
-);
-
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [files, setFiles] = useState<MedicalFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // 🔧 FIXED: Define refreshFiles first without dependencies
+  // Refresh files list
   const refreshFiles = useCallback(async () => {
     console.log("Refreshing files...");
     setIsLoading(true);
+    
     try {
-      const response = await fetch(`${API_BASE_URL}/api/files`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          console.log("Files loaded successfully:", data.files.length);
-          setFiles(data.files);
-        } else {
-          console.error('Failed to fetch files:', data.message);
-          setFiles([]);
-        }
-      } else {
-        console.error('Failed to fetch files:', response.statusText);
-        setFiles([]);
-      }
+      const result = await FileService.getFiles();
+      setFiles(result.files);
     } catch (error) {
-      console.error('Error fetching files:', error);
+      console.error('Error refreshing files:', error);
       setFiles([]);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Empty dependency array - this function doesn't depend on anything
+  }, []);
 
-  // 🔧 FIXED: Now we can safely use refreshFiles in useEffect
+  // Listen for user login events
   useEffect(() => {
     const handleUserLogin = () => {
       console.log("User logged in event received, refreshing files...");
@@ -91,34 +57,28 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       window.removeEventListener('userLoggedIn', handleUserLogin);
     };
-  }, [refreshFiles]); // Now refreshFiles is properly defined
+  }, [refreshFiles]);
 
-  const uploadFile = useCallback(async (fileData: FileUploadData): Promise<boolean> => {
+  const uploadFile = useCallback(async (fileData: FileUploadRequest): Promise<boolean> => {
     try {
       setIsLoading(true);
       
-      const formData = new FormData();
-      formData.append('fileName', fileData.fileName);
-      formData.append('fileType', fileData.fileType);
-      formData.append('file', fileData.file);
-
-      const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      // 🔧 REMOVED: Double validation - validation should happen in component
+      // The component should validate before calling this function
+      
+      const result = await FileService.uploadFile(fileData);
+      
+      if (result.success) {
         await refreshFiles();
         return true;
       } else {
-        console.error('Upload failed:', data.message);
+        console.error('Upload failed:', result.message);
+        alert(result.message || 'Upload failed');
         return false;
       }
     } catch (error) {
       console.error('Upload error:', error);
+      alert('An error occurred during upload');
       return false;
     } finally {
       setIsLoading(false);
@@ -129,22 +89,19 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_BASE_URL}/api/files/${fileId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
+      const result = await FileService.deleteFile(fileId);
+      
+      if (result.success) {
         await refreshFiles();
         return true;
       } else {
-        console.error('Delete failed:', data.message);
+        console.error('Delete failed:', result.message);
+        alert(result.message || 'Delete failed');
         return false;
       }
     } catch (error) {
       console.error('Delete error:', error);
+      alert('An error occurred during deletion');
       return false;
     } finally {
       setIsLoading(false);
@@ -153,33 +110,16 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const downloadFile = useCallback(async (fileId: string, fileName: string): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/files/${fileId}/download`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = fileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } else {
-        console.error('Download failed:', response.statusText);
-        throw new Error('Download failed');
-      }
+      await FileService.downloadFile(fileId, fileName);
     } catch (error) {
       console.error('Download error:', error);
+      alert('Download failed');
       throw error;
     }
   }, []);
 
   const viewFile = useCallback((fileId: string): void => {
-    const viewUrl = `${API_BASE_URL}/api/files/${fileId}/view`;
-    window.open(viewUrl, '_blank');
+    FileService.viewFile(fileId);
   }, []);
 
   const value = {

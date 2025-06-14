@@ -11,32 +11,15 @@ public class FileStorageService : IFileStorageService
 
     public FileStorageService(IConfiguration configuration)
     {
-        _basePath = configuration["FileStorage:BasePath"] ?? "uploads";
+        _basePath = configuration["FileStorage:BasePath"] ?? Path.Combine(Directory.GetCurrentDirectory(), "uploads");
+        _maxFileSize = long.Parse(configuration["FileStorage:MaxFileSize"] ?? "10485760"); // 10MB default
+        _allowedExtensions = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".doc", ".docx" };
 
-        // 🔧 FIXED: Use simple string parsing instead of GetValue<T>
-        var maxFileSizeStr = configuration["FileStorage:MaxFileSize"];
-        _maxFileSize = long.TryParse(maxFileSizeStr, out var maxSize) ? maxSize : 10485760; // 10MB default
-
-        // 🔧 FIXED: Use simple configuration reading for extensions
-        var extensionsSection = configuration.GetSection("FileStorage:AllowedExtensions");
-        var extensionsList = new List<string>();
-
-        foreach (var child in extensionsSection.GetChildren())
+        // Ensure base directory exists
+        if (!Directory.Exists(_basePath))
         {
-            if (!string.IsNullOrWhiteSpace(child.Value))
-            {
-                extensionsList.Add(child.Value);
-            }
+            Directory.CreateDirectory(_basePath);
         }
-
-        _allowedExtensions = extensionsList.Count > 0
-            ? extensionsList.ToArray()
-            : new[] { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx" };
-
-        // Ensure directories exist
-        EnsureDirectoryExists(Path.Combine(_basePath, "medical-files"));
-        EnsureDirectoryExists(Path.Combine(_basePath, "profiles"));
-        EnsureDirectoryExists(Path.Combine(_basePath, "temp"));
     }
 
     public async Task<string> SaveFileAsync(Stream fileStream, string fileName, string contentType, string? subfolder = null)
@@ -65,15 +48,18 @@ public class FileStorageService : IFileStorageService
                 counter++;
             }
 
-            using var fileStreamOutput = new FileStream(filePath, FileMode.Create);
-            await fileStream.CopyToAsync(fileStreamOutput);
+            // Save file
+            using var fileStreamWriter = new FileStream(filePath, FileMode.Create);
+            await fileStream.CopyToAsync(fileStreamWriter);
 
-            // Return relative path for storage in database
-            return Path.Combine(storageFolder, Path.GetFileName(filePath)).Replace('\\', '/');
+            // Return relative path for database storage
+            var relativePath = Path.GetRelativePath(_basePath, filePath);
+            return relativePath.Replace('\\', '/');
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Failed to save file: {ex.Message}", ex);
+            Console.WriteLine($"File save error: {ex.Message}");
+            throw;
         }
     }
 
@@ -86,8 +72,7 @@ public class FileStorageService : IFileStorageService
             throw new FileNotFoundException($"File not found: {filePath}");
         }
 
-        Stream fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read);
-        return Task.FromResult(fileStream);
+        return Task.FromResult<Stream>(new FileStream(fullPath, FileMode.Open, FileAccess.Read));
     }
 
     public Task<bool> DeleteFileAsync(string filePath)
@@ -101,11 +86,11 @@ public class FileStorageService : IFileStorageService
                 File.Delete(fullPath);
                 return Task.FromResult(true);
             }
+
             return Task.FromResult(false);
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error deleting file {filePath}: {ex.Message}");
             return Task.FromResult(false);
         }
     }
@@ -127,23 +112,43 @@ public class FileStorageService : IFileStorageService
         return _maxFileSize;
     }
 
+    // 🔧 ENHANCED: Complete MIME type validation
     public bool IsAllowedFileType(string contentType)
     {
         if (string.IsNullOrEmpty(contentType))
             return false;
 
+        // Normalize content type (remove charset, etc.)
+        var normalizedContentType = contentType.Split(';')[0].Trim().ToLower();
+
         var allowedTypes = new[]
         {
+            // PDF files
             "application/pdf",
+            
+            // Image files
             "image/jpeg",
-            "image/jpg",
+            "image/jpg",     // Some browsers might send this
+            "image/pjpeg",   // Progressive JPEG
             "image/png",
+            "image/x-png",   // Alternative PNG MIME type
             "image/gif",
+            "image/webp",    // WebP support
+            
+            // Microsoft Word files
             "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            
+            // Additional document types
+            "text/plain",
+            "application/rtf",
+            "text/rtf",
+            
+            // 🔧 BROWSER SPECIFIC: Some browsers send different MIME types
+            "application/octet-stream" // Fallback for some file uploads
         };
 
-        return allowedTypes.Contains(contentType.ToLower());
+        return allowedTypes.Contains(normalizedContentType);
     }
 
     public string[] GetAllowedExtensions()

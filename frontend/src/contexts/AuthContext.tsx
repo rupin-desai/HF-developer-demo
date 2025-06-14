@@ -1,15 +1,11 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  gender: "male" | "female";
-  phoneNumber: string;
-  profileImage: string;
-}
+// 🔧 FIXED: Use explicit import path and named import
+import { AuthService } from '@/api/authService';
+// 🔧 ALTERNATIVE: Or use the index file
+// import { AuthService } from '@/api';
+import type { User } from '@/api/types';
 
 interface AuthContextType {
   user: User | null;
@@ -31,11 +27,6 @@ export const useAuth = () => {
   return context;
 };
 
-// Use environment variable if available, fallback to hardcoded URL
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://hf-developer-demo.onrender.com'
-  : 'http://localhost:8080';
-
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,16 +40,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const checkAuthStatus = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        setUser(null);
-      }
+      const userData = await AuthService.checkAuthStatus();
+      setUser(userData);
     } catch (error) {
       console.error('Auth check failed:', error);
       setUser(null);
@@ -69,47 +52,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        console.log("Login successful, setting user data:", userData);
+      const result = await AuthService.login({ email, password });
+      
+      if (result.success && result.user) {
+        setUser(result.user);
         
-        // 🔧 CRITICAL FIX: Set user state first
-        setUser(userData);
-        
-        // 🔧 CRITICAL FIX: Use multiple event dispatches with user data
-        setTimeout(() => {
-          console.log("Dispatching userLoggedIn event with data:", userData);
-          window.dispatchEvent(new CustomEvent('userLoggedIn', { 
-            detail: userData 
-          }));
-        }, 50);
-        
-        setTimeout(() => {
-          console.log("Dispatching userStateChanged event");
-          window.dispatchEvent(new CustomEvent('userStateChanged', { 
-            detail: userData 
-          }));
-        }, 150);
-        
-        // 🔧 NEW: Force React state update
+        // Force React state update
         setTimeout(() => {
           console.log("Force user context update");
-          setUser((prevUser) => ({ ...userData }));
+          setUser((prevUser) => ({ ...result.user! }));
         }, 250);
         
         return true;
-      } else {
-        return false;
       }
+      
+      return false;
     } catch (error) {
       console.error('Login failed:', error);
       return false;
@@ -118,20 +75,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const signup = async (userData: Omit<User, 'id' | 'profileImage'> & { password: string }): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(userData),
-      });
-
-      if (response.ok) {
-        return true;
-      } else {
-        return false;
-      }
+      return await AuthService.signup(userData);
     } catch (error) {
       console.error('Signup failed:', error);
       return false;
@@ -140,10 +84,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await AuthService.logout();
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
@@ -151,51 +92,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // 🔧 NEW: Connect to backend profile update API
   const updateProfile = async (userData: Partial<User>, profilePicture?: File): Promise<boolean> => {
     try {
-      const formData = new FormData();
+      const result = await AuthService.updateProfile(userData, profilePicture);
       
-      // Add user data to form
-      if (userData.fullName) formData.append('fullName', userData.fullName);
-      if (userData.email) formData.append('email', userData.email);
-      if (userData.gender) formData.append('gender', userData.gender);
-      if (userData.phoneNumber) formData.append('phoneNumber', userData.phoneNumber);
-      
-      // Add profile picture if provided
-      if (profilePicture) {
-        formData.append('profilePicture', profilePicture);
-      } else if (user?.profileImage) {
-        formData.append('existingProfileImage', user.profileImage);
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/profile/update`, {
-        method: 'PUT',
-        credentials: 'include',
-        body: formData
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.user) {
-          console.log("Profile updated successfully:", result.user);
-          setUser(result.user);
-          
-          // Dispatch update events
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-              detail: result.user 
-            }));
-          }, 50);
-          
-          return true;
-        } else {
-          console.error('Profile update failed:', result.message);
-          return false;
-        }
+      if (result.success && result.user) {
+        setUser(result.user);
+        return true;
       } else {
-        const errorData = await response.json();
-        console.error('Profile update failed:', errorData.message);
+        console.error('Profile update failed:', result.message);
         return false;
       }
     } catch (error) {
