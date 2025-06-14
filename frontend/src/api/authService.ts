@@ -436,31 +436,59 @@ export class AuthService {
       }
 
       // Safely parse JSON response
-      const data = await safeJsonParse<ApiResponse<User>>(response);
+      const data = await safeJsonParse<any>(response);
+      console.log('Profile update response data:', data);
 
-      if (data.success && data.data) {
-        console.log('Profile update successful:', data.data);
+      // 🔧 FIX: Check different possible response structures
+      // Your backend might return { success: true, user: {...} } or just the user directly
+      if (data.success !== false) { // Allow undefined or true
+        let userData: User | undefined;
         
-        // Update stored user data
-        SessionStorage.setUser(data.data);
+        // Try different response structures
+        if (data.user && data.user.id) {
+          // Structure: { success: true, user: {...} }
+          userData = data.user;
+        } else if (data.data && data.data.id) {
+          // Structure: { success: true, data: {...} }
+          userData = data.data;
+        } else if (data.id) {
+          // Structure: direct user object
+          userData = data;
+        }
         
-        // Dispatch profile updated event
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
-              detail: data.data 
-            }));
-            console.log('userProfileUpdated event dispatched');
-          }
-        }, 100);
-        
-        return {
-          success: true,
-          user: data.data,
-          message: data.message || 'Profile updated successfully'
-        };
+        if (userData && userData.id) {
+          console.log('Profile update successful:', userData);
+          
+          // Update stored user data
+          SessionStorage.setUser(userData);
+          
+          // Dispatch profile updated event
+          setTimeout(() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('userProfileUpdated', { 
+                detail: userData 
+              }));
+              console.log('userProfileUpdated event dispatched');
+            }
+          }, 100);
+          
+          return {
+            success: true,
+            user: userData,
+            message: data.message || 'Profile updated successfully'
+          };
+        } else {
+          // Success response but no user data - still count as success
+          console.log('Profile update successful but no user data returned');
+          return {
+            success: true,
+            user: undefined,
+            message: data.message || 'Profile updated successfully'
+          };
+        }
       } else {
-        console.error('Profile update failed:', data.message);
+        // API explicitly returned success: false
+        console.error('Profile update failed - API returned success: false:', data.message);
         return { 
           success: false, 
           user: undefined,
