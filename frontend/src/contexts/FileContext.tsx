@@ -38,13 +38,16 @@ export const useFiles = () => {
   return context;
 };
 
-const API_BASE_URL = 'http://localhost:5000';
+// Use environment variable if available, fallback to hardcoded URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://hf-developer-demo.onrender.com' 
+    : 'http://localhost:5000');
 
 export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [files, setFiles] = useState<MedicalFile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Use useCallback to memoize the function and prevent recreating it on every render
   const refreshFiles = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -70,7 +73,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, []); // Empty dependency array since this function doesn't depend on any props or state
+  }, []);
 
   const uploadFile = useCallback(async (fileData: FileUploadData): Promise<boolean> => {
     try {
@@ -90,7 +93,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
 
       if (response.ok && data.success) {
-        await refreshFiles(); // Refresh the file list
+        await refreshFiles();
         return true;
       } else {
         console.error('Upload failed:', data.message);
@@ -116,7 +119,7 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await response.json();
 
       if (response.ok && data.success) {
-        await refreshFiles(); // Refresh the file list
+        await refreshFiles();
         return true;
       } else {
         console.error('Delete failed:', data.message);
@@ -157,7 +160,6 @@ export const FileProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const viewFile = useCallback((fileId: string): void => {
-    // Open file in new tab for viewing
     const viewUrl = `${API_BASE_URL}/api/files/${fileId}/view`;
     window.open(viewUrl, '_blank');
   }, []);

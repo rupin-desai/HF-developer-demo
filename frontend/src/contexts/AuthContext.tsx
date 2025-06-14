@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {
   id: string;
@@ -11,20 +11,12 @@ interface User {
   profileImage: string;
 }
 
-interface SignupData {
-  fullName: string;
-  email: string;
-  gender: string;
-  phoneNumber: string;
-  password: string;
-}
-
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (userData: SignupData) => Promise<boolean>;
+  signup: (userData: Omit<User, 'id' | 'profileImage'> & { password: string }) => Promise<boolean>;
   logout: () => void;
   updateProfile: (userData: Partial<User>) => void;
 }
@@ -39,48 +31,42 @@ export const useAuth = () => {
   return context;
 };
 
-const API_BASE_URL = 'http://localhost:5000';
+// Use environment variable if available, fallback to hardcoded URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://hf-developer-demo.onrender.com' 
+    : 'http://localhost:5000');
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check if user is logged in on app start
+  const isAuthenticated = user !== null;
+
+  // Check authentication status on app load
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          credentials: 'include', // Include cookies
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          setUser({
-            id: userData.id,
-            fullName: userData.fullName,
-            email: userData.email,
-            gender: userData.gender.toLowerCase() as 'male' | 'female',
-            phoneNumber: userData.phoneNumber,
-            profileImage: userData.profileImage
-          });
-          setIsAuthenticated(true);
-        } else {
-          // User not authenticated
-          setUser(null);
-          setIsAuthenticated(false);
-        }
-      } catch (error) {
-        console.error('Error checking authentication:', error);
-        setUser(null);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
+    checkAuthStatus();
   }, []);
+
+  const checkAuthStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
@@ -89,37 +75,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include cookies
-        body: JSON.stringify({
-          email,
-          password
-        })
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setUser({
-          id: data.user.id,
-          fullName: data.user.fullName,
-          email: data.user.email,
-          gender: data.user.gender.toLowerCase() as 'male' | 'female',
-          phoneNumber: data.user.phoneNumber,
-          profileImage: data.user.profileImage
-        });
-        setIsAuthenticated(true);
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
         return true;
       } else {
-        console.error('Login failed:', data.message);
         return false;
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login failed:', error);
       return false;
     }
   };
 
-  const signup = async (userData: SignupData): Promise<boolean> => {
+  const signup = async (userData: Omit<User, 'id' | 'profileImage'> & { password: string }): Promise<boolean> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
         method: 'POST',
@@ -127,21 +100,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify(userData)
+        body: JSON.stringify(userData),
       });
 
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        // After successful signup, user needs to login
-        console.log('Signup successful:', data.message);
+      if (response.ok) {
         return true;
       } else {
-        console.error('Signup failed:', data.message);
         return false;
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Signup failed:', error);
       return false;
     }
   };
@@ -153,20 +121,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         credentials: 'include',
       });
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Logout request failed:', error);
     } finally {
       setUser(null);
-      setIsAuthenticated(false);
     }
   };
 
-  const updateProfile = async (userData: Partial<User>) => {
+  const updateProfile = (userData: Partial<User>) => {
     if (user) {
-      const updatedUser = { ...user, ...userData };
-      setUser(updatedUser);
-      
-      // TODO: Add API call to update profile on backend
-      console.log("Profile updated:", updatedUser);
+      setUser({ ...user, ...userData });
     }
   };
 
@@ -177,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     signup,
     logout,
-    updateProfile
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
