@@ -25,11 +25,16 @@ export const API_ENDPOINTS = {
     UPLOAD: '/api/files/upload',
     DELETE: (id: string) => `/api/files/${id}`,
     DOWNLOAD: (id: string) => `/api/files/${id}/download`,
-    VIEW: (id: string) => `/api/files/${id}/view`
+    // 🔧 FIXED: Correct view endpoint
+    VIEW: (id: string) => `/api/files/${id}/view`,
+    // 🔧 NEW: Direct file access endpoint
+    STREAM: (id: string) => `/api/files/${id}/stream`
   },
   // Static files
   STATIC: {
-    PROFILE_IMAGE: (path: string) => `/staticfiles/${path}`
+    PROFILE_IMAGE: (path: string) => `/staticfiles/${path}`,
+    // 🔧 NEW: Direct file access
+    FILE: (path: string) => `/staticfiles/${path}`
   }
 } as const;
 
@@ -70,4 +75,14 @@ export const apiRequest = async (
     console.error(`API request failed for ${endpoint}:`, error);
     throw error;
   }
+};
+
+// 🔧 NEW: Helper to get full file URL
+export const getFileViewUrl = (fileId: string): string => {
+  return `${API_BASE_URL}${API_ENDPOINTS.FILES.VIEW(fileId)}`;
+};
+
+// 🔧 NEW: Helper to get file stream URL  
+export const getFileStreamUrl = (fileId: string): string => {
+  return `${API_BASE_URL}${API_ENDPOINTS.FILES.STREAM(fileId)}`;
 };
