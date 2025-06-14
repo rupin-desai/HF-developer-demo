@@ -34,6 +34,7 @@ export default function DashboardFilesList({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [previewError, setPreviewError] = useState<string>("");
   const [isImageLoading, setIsImageLoading] = useState(false);
+  const [thumbnailErrors, setThumbnailErrors] = useState<Set<string>>(new Set());
 
   // Helper function to get file icon based on type
   const getFileIcon = (fileName: string, contentType?: string) => {
@@ -83,6 +84,22 @@ export default function DashboardFilesList({
            extension === 'pdf';
   };
 
+  // 🔧 NEW: Check if file is an image for thumbnail preview
+  const isImageFile = (fileName: string, contentType?: string) => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    const type = contentType?.toLowerCase() || '';
+    
+    return type.includes('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '');
+  };
+
+  // 🔧 NEW: Check if file is a PDF
+  const isPdfFile = (fileName: string, contentType?: string) => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    const type = contentType?.toLowerCase() || '';
+    
+    return type.includes('pdf') || extension === 'pdf';
+  };
+
   // 🔧 ENHANCED: Get the correct file URL for preview
   const getPreviewUrl = (file: FileItem): string => {
     // Try multiple URL patterns
@@ -92,6 +109,65 @@ export default function DashboardFilesList({
     
     // Use API endpoint for file viewing
     return getFileViewUrl(file.id);
+  };
+
+  // 🔧 NEW: Handle thumbnail loading errors
+  const handleThumbnailError = (fileId: string) => {
+    setThumbnailErrors(prev => {
+      const newSet = new Set(prev);
+      newSet.add(fileId);
+      return newSet;
+    });
+  };
+
+  // 🔧 NEW: Render grid preview thumbnail
+  const renderGridPreview = (file: FileItem) => {
+    if (isImageFile(file.fileName, file.contentType) && !thumbnailErrors.has(file.id)) {
+      return (
+        <div className="relative w-full h-32 mb-3 bg-gray-100 rounded-lg overflow-hidden">
+          <img
+            src={getPreviewUrl(file)}
+            alt={file.fileName}
+            className="w-full h-full object-cover hover:scale-105 transition-transform duration-200"
+            onError={() => handleThumbnailError(file.id)}
+            onLoad={(e) => {
+              // Remove any loading placeholder
+              const img = e.target as HTMLImageElement;
+              img.style.opacity = '1';
+            }}
+            style={{ opacity: 0 }}
+            onLoadStart={(e) => {
+              const img = e.target as HTMLImageElement;
+              img.style.opacity = '0.7';
+            }}
+          />
+          {/* Image overlay with file type badge */}
+          <div className="absolute top-2 left-2">
+            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+              IMG
+            </span>
+          </div>
+        </div>
+      );
+    } else if (isPdfFile(file.fileName, file.contentType)) {
+      return (
+        <div className="relative w-full h-32 mb-3 bg-red-50 rounded-lg overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-red-200">
+          <FileText className="w-12 h-12 text-red-500 mb-2" />
+          <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+            PDF
+          </span>
+        </div>
+      );
+    } else {
+      return (
+        <div className="relative w-full h-32 mb-3 bg-gray-50 rounded-lg overflow-hidden flex flex-col items-center justify-center border-2 border-dashed border-gray-200">
+          {getFileIcon(file.fileName, file.contentType)}
+          <span className="bg-gray-500 text-white text-xs px-2 py-1 rounded-full font-medium mt-2">
+            {file.fileName.split('.').pop()?.toUpperCase() || 'FILE'}
+          </span>
+        </div>
+      );
+    }
   };
 
   // Handle file preview
@@ -167,51 +243,86 @@ export default function DashboardFilesList({
             <p className="text-gray-400 text-sm mt-2">Upload your first medical record to get started</p>
           </div>
         ) : viewMode === 'grid' ? (
-          /* Grid View */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          /* 🔧 ENHANCED: Grid View with Preview Thumbnails */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
             {files.map((file) => (
               <div
                 key={file.id}
-                className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-shadow border border-gray-200"
+                className="bg-white rounded-xl p-4 hover:shadow-lg transition-all duration-200 border border-gray-200 hover:border-gray-300 group cursor-pointer"
+                onClick={() => handlePreview(file)}
               >
-                {/* File icon/preview */}
-                <div className="flex items-center justify-center h-20 mb-3">
-                  {getFileIcon(file.fileName, file.contentType)}
-                </div>
+                {/* 🔧 NEW: File preview thumbnail */}
+                {renderGridPreview(file)}
                 
                 {/* File details */}
-                <div className="text-center">
-                  <h3 className="font-medium text-gray-900 text-sm truncate mb-1" title={file.fileName}>
+                <div className="space-y-2">
+                  <h3 
+                    className="font-medium text-gray-900 text-sm truncate group-hover:text-blue-600 transition-colors" 
+                    title={file.fileName}
+                  >
                     {file.fileName}
                   </h3>
-                  <p className="text-xs text-gray-500 mb-1">{file.fileType}</p>
-                  <p className="text-xs text-gray-400">{formatFileSize(file.fileSize)}</p>
+                  
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span className="bg-gray-100 px-2 py-1 rounded-full">
+                      {file.fileType}
+                    </span>
+                    <span>{formatFileSize(file.fileSize)}</span>
+                  </div>
+                  
+                  <div className="text-xs text-gray-400 flex items-center">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    {formatDate(file.uploadDate)}
+                  </div>
                 </div>
                 
-                {/* Actions */}
-                <div className="flex justify-center space-x-2 mt-3">
+                {/* 🔧 ENHANCED: Actions with better positioning */}
+                <div className="flex justify-center space-x-1 mt-4 pt-3 border-t border-gray-100">
                   <button
-                    onClick={() => handlePreview(file)}
-                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePreview(file);
+                    }}
+                    className="flex-1 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-xs font-medium"
                     title="Preview"
                   >
-                    <Eye className="w-4 h-4" />
+                    <Eye className="w-4 h-4 mx-auto mb-1" />
+                    Preview
                   </button>
                   <button
-                    onClick={() => onDownloadFile(file.id, file.fileName)}
-                    className="p-2 text-green-600 hover:bg-green-100 rounded-full transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDownloadFile(file.id, file.fileName);
+                    }}
+                    className="flex-1 p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors text-xs font-medium"
                     title="Download"
                   >
-                    <Download className="w-4 h-4" />
+                    <Download className="w-4 h-4 mx-auto mb-1" />
+                    Download
                   </button>
                   <button
-                    onClick={() => onDeleteFile(file.id)}
-                    className="p-2 text-red-600 hover:bg-red-100 rounded-full transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`Are you sure you want to delete "${file.fileName}"?`)) {
+                        onDeleteFile(file.id);
+                      }
+                    }}
+                    className="flex-1 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-xs font-medium"
                     title="Delete"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4 mx-auto mb-1" />
+                    Delete
                   </button>
                 </div>
+
+                {/* 🔧 NEW: Quick preview indicator */}
+                {canPreview(file.fileName, file.contentType) && (
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-black bg-opacity-75 text-white p-1 rounded-full">
+                      <Eye className="w-3 h-3" />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -224,7 +335,19 @@ export default function DashboardFilesList({
                 <div key={file.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <div className="flex items-start space-x-3">
                     <div className="flex-shrink-0">
-                      {getFileIcon(file.fileName, file.contentType)}
+                      {/* 🔧 NEW: Small thumbnail for mobile list */}
+                      {isImageFile(file.fileName, file.contentType) && !thumbnailErrors.has(file.id) ? (
+                        <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden">
+                          <img
+                            src={getPreviewUrl(file)}
+                            alt={file.fileName}
+                            className="w-full h-full object-cover"
+                            onError={() => handleThumbnailError(file.id)}
+                          />
+                        </div>
+                      ) : (
+                        getFileIcon(file.fileName, file.contentType)
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-medium text-gray-900 text-sm mb-1 truncate">
@@ -292,7 +415,19 @@ export default function DashboardFilesList({
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 mr-3">
-                          {getFileIcon(file.fileName, file.contentType)}
+                          {/* 🔧 NEW: Small thumbnail for desktop list */}
+                          {isImageFile(file.fileName, file.contentType) && !thumbnailErrors.has(file.id) ? (
+                            <div className="w-10 h-10 bg-gray-100 rounded-lg overflow-hidden">
+                              <img
+                                src={getPreviewUrl(file)}
+                                alt={file.fileName}
+                                className="w-full h-full object-cover"
+                                onError={() => handleThumbnailError(file.id)}
+                              />
+                            </div>
+                          ) : (
+                            getFileIcon(file.fileName, file.contentType)
+                          )}
                         </div>
                         <div>
                           <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
