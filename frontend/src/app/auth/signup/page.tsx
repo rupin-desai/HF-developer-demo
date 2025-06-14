@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 interface SignupFormData {
   fullName: string;
   email: string;
-  gender: string;
+  gender: "male" | "female";
   phoneNumber: string;
   password: string;
   confirmPassword: string;
@@ -74,7 +74,8 @@ export default function SignupPage() {
       } else {
         setError("Signup failed. Please try again.");
       }
-    } catch (err) {
+    } catch (error) {
+      console.error('Signup error:', error);
       setError("Signup failed. Please try again.");
     } finally {
       setIsLoading(false);
