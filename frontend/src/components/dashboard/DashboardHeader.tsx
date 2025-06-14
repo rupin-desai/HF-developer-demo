@@ -4,7 +4,7 @@ import { LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 interface DashboardHeaderProps {
-  userName: string;
+  userName?: string;  // Make optional to handle undefined
   onLogout: () => void;
 }
 
@@ -14,6 +14,10 @@ export default function DashboardHeader({ userName, onLogout }: DashboardHeaderP
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
+
+  // Handle undefined userName with fallback
+  const displayName = userName || "User";
+  const userInitial = displayName.charAt(0).toUpperCase();
 
   return (
     <header className="bg-white shadow-lg">
@@ -32,7 +36,7 @@ export default function DashboardHeader({ userName, onLogout }: DashboardHeaderP
           <div className="hidden md:flex items-center space-x-4">
             <div className="flex items-center space-x-3">
               <span className="text-sm lg:text-base text-gray-700">
-                Welcome, <span className="font-medium">{userName}</span>
+                Welcome, <span className="font-medium">{displayName}</span>
               </span>
               <button
                 onClick={onLogout}
@@ -74,13 +78,13 @@ export default function DashboardHeader({ userName, onLogout }: DashboardHeaderP
                 <div className="flex-shrink-0">
                   <div className="h-8 w-8 bg-gray-300 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-gray-700">
-                      {userName.charAt(0).toUpperCase()}
+                      {userInitial}
                     </span>
                   </div>
                 </div>
                 <div className="ml-3">
                   <div className="text-sm font-medium text-gray-900">
-                    {userName}
+                    {displayName}
                   </div>
                   <div className="text-xs text-gray-500">
                     Medical Records Dashboard
